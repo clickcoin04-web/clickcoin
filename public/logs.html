@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Logs</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      color: white;
+      background-image: url("./BackgroundCC.jpg");
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 15px;
+      padding-bottom: 100px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .back-btn {
+      margin: 10px 0;
+      padding: 8px 12px;
+      background: gold;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .log {
+      background: #1e293b;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .type {
+      font-weight: bold;
+      color: gold;
+    }
+
+    .date {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 5px;
+    }
+
+    .empty {
+      text-align: center;
+      margin-top: 30px;
+      color: #aaa;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="top-bar">
+    <button onclick="goBack()" class="back-btn">←</button>
+  </div>
+
+  <h2>Activity Logs</h2>
+
+  <div id="logList"></div>
+
+</div>
+
+<script>
+// SAFE PARSE
+function safeParse(data) {
+  try { return JSON.parse(data); } catch { return null; }
+}
+
+// BACK
+function goBack() {
+  window.location.href = "account.html";
+}
+
+// LOAD LOGS
+function loadLogs() {
+  const container = document.getElementById("logList");
+  let logs = safeParse(localStorage.getItem("logs")) || [];
+
+  if (logs.length === 0) {
+    container.innerHTML = "<p class='empty'>No logs found.</p>";
+    return;
+  }
+
+  // 🔥 NEWEST FIRST
+  logs = logs.reverse();
+
+  container.innerHTML = "";
+
+  logs.forEach(log => {
+    container.innerHTML += `
+      <div class="log">
+        <div class="type">${log.type}</div>
+        <div>${log.details || "No details"}</div>
+        <div class="date">${log.date}</div>
+      </div>
+    `;
+  });
+}
+
+// LOGIN CHECK
+function checkUser() {
+  const user = safeParse(localStorage.getItem("currentUser"));
+  if (!user) {
+    window.location.href = "index.html";
+  }
+}
+
+// START
+document.addEventListener("DOMContentLoaded", () => {
+  checkUser();
+  loadLogs();
+});
+</script>
+
+<div class="bottom-menu">
+  <div class="menu-item" onclick="location.href='home.html'">HOME</div>
+  <div class="menu-item" onclick="location.href='task.html'">TASK</div>
+  <div class="menu-item" onclick="location.href='team.html'">TEAM</div>
+  <div class="menu-item active" onclick="location.href='account.html'">ACCOUNT</div>
+</div>
+
+</body>
+</html>

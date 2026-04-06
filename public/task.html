@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Tasks - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+
+/* 🔥 GLOBAL */
+body{
+  margin:0;
+  font-family:Arial;
+  background:url("BackgroundCC.jpg") no-repeat center center/cover;
+  color:white;
+  min-height:100vh;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.6);
+  z-index:0;
+}
+
+.main-wrapper{
+  position:relative;
+  z-index:1;
+  max-width:420px;
+  margin:auto;
+  padding:20px;
+  padding-bottom:120px;
+  text-align:center;
+}
+
+.logo{
+  width:120px;
+  margin:20px auto;
+  display:block;
+  animation:float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+  0%{transform:translateY(0)}
+  50%{transform:translateY(-10px)}
+  100%{transform:translateY(0)}
+}
+
+.glow{
+  color:#ffd700;
+  margin-bottom:20px;
+}
+
+.task-list{
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+}
+
+.card{
+  background:#1e293b;
+  border-radius:15px;
+  padding:10px;
+  display:flex;
+  gap:10px;
+}
+
+.card img{
+  width:60px;
+  border-radius:10px;
+}
+
+.card-info{
+  text-align:left;
+  flex:1;
+}
+
+.progress-bar{
+  width:100%;
+  height:8px;
+  background:#333;
+  border-radius:10px;
+}
+
+.progress-fill{
+  height:100%;
+  background:#ffd700;
+}
+
+.back-btn{
+  position:fixed;
+  top:15px;
+  left:15px;
+  background:#ffd700;
+  border:none;
+  padding:6px 10px;
+  border-radius:8px;
+  cursor:pointer;
+  z-index:9999;
+}
+
+.bottom-menu{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  margin:auto;
+  width:100%;
+  max-width:420px;
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  border-radius:20px 20px 0 0;
+  display:flex;
+  justify-content:space-around;
+  padding:12px 10px;
+  box-shadow:0 -5px 20px rgba(0,0,0,0.6);
+  z-index:99999;
+}
+
+.menu-item{
+  flex:1;
+  text-align:center;
+  color:#aaa;
+  font-size:11px;
+  cursor:pointer;
+}
+
+.menu-item.active{
+  color:#ffd700;
+  font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<button class="back-btn" onclick="goBack()">⬅️ Back</button>
+
+<div class="main-wrapper">
+  <img src="LOGOClickCoin.png" class="logo">
+  <h3 id="wallet" class="glow">BALANCE ₱0</h3>
+
+  <div id="taskList" class="task-list"></div>
+</div>
+
+<!-- 🔥 FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+  storageBucket: "clickcoin-81040.appspot.com",
+  messagingSenderId: "227649837889",
+  appId: "1:227649837889:web:81ac51f2e358ed2231dfc0"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+window.db = db;
+window.set = set;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    location.href = "index.html";
+    return;
+  }
+
+  const snap = await get(ref(db, 'users/' + user.uid));
+  if (snap.exists()) {
+    localStorage.setItem("currentUser", JSON.stringify({ ...snap.val(), uid:user.uid }));
+  }
+
+  startApp();
+});
+</script>
+
+<script>
+function getUser(){
+  return JSON.parse(localStorage.getItem("currentUser"));
+}
+
+function formatPHP(val){
+  return "₱" + Number(val || 0).toLocaleString("en-PH");
+}
+
+function updateBalanceUI(){
+  const user = getUser();
+  document.getElementById("wallet").innerText =
+    "BALANCE " + formatPHP(user?.wallet || 0);
+}
+</script>
+
+<!-- 🔥 CORE LOGIC -->
+<script>
+function startApp(){
+  updateBalanceUI();
+  syncBalance();
+  loadTasks();
+  startAutoIncome(); // 🔥 IMPORTANT
+}
+</script>
+
+<script>
+function loadTasks(){
+  const container = document.getElementById("taskList");
+  container.innerHTML = "";
+
+  const tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
+
+  // 🔥 NEW USER (NO BUY)
+  if(tasks.length === 0){
+    container.innerHTML = `
+      <p style="color:#aaa">
+        No active tasks<br><br>
+        👉 Go to HOME and BUY a task to start earning
+      </p>
+    `;
+    return;
+  }
+
+  tasks.forEach(task=>{
+    const now = Date.now();
+    const progress = Math.min((now - task.startTime)/task.duration,1);
+    const percent = Math.floor(progress * 100);
+
+    const earned = task.totalRevenue * progress;
+
+    container.innerHTML += `
+      <div class="card">
+        <img src="LOGOClickCoin.png">
+        <div class="card-info">
+          <h3>${task.name}</h3>
+          <p>Earned: ${formatPHP(earned)}</p>
+          <p>Total: ${formatPHP(task.totalRevenue)}</p>
+          <p>Progress: ${percent}%</p>
+
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${percent}%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+}
+</script>
+
+<!-- 🔥 AUTO INCOME SYSTEM -->
+<script>
+function startAutoIncome(){
+  setInterval(()=>{
+    const user = getUser();
+    if(!user) return;
+
+    let tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
+    let totalEarned = 0;
+
+    tasks.forEach(task=>{
+      const now = Date.now();
+      const progress = Math.min((now-task.startTime)/task.duration,1);
+      totalEarned += task.totalRevenue * progress;
+    });
+
+    // 🔥 SAVE TO FIREBASE
+    if(user.uid){
+      const userRef = ref(db,'users/'+user.uid);
+
+      window.set(userRef,{
+        ...user,
+        wallet: Math.floor(totalEarned)
+      });
+    }
+
+    // 🔥 UPDATE LOCAL
+    user.wallet = Math.floor(totalEarned);
+    localStorage.setItem("currentUser", JSON.stringify(user));
+
+    updateBalanceUI();
+    loadTasks();
+
+  },3000); // every 3 sec
+}
+</script>
+
+<!-- 🔥 SYNC FROM FIREBASE -->
+<script>
+function syncBalance(){
+  const user = getUser();
+  if(!user?.uid) return;
+
+  const userRef = ref(db,'users/'+user.uid);
+
+  onValue(userRef,(snap)=>{
+    const data = snap.val();
+    if(data){
+      localStorage.setItem("currentUser", JSON.stringify(data));
+      updateBalanceUI();
+    }
+  });
+}
+</script>
+
+<script>
+function goBack(){
+  location.href="home.html";
+}
+</script>
+
+<!-- 🔥 MENU -->
+<div class="bottom-menu">
+  <div class="menu-item" onclick="location.href='home.html'">HOME</div>
+  <div class="menu-item active">TASK</div>
+  <div class="menu-item" onclick="location.href='team.html'">TEAM</div>
+  <div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
+</div>
+
+</body>
+</html>

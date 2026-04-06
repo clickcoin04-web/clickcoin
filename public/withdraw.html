@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Withdraw - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:url("BackgroundCC.jpg") no-repeat center/cover;
+color:#fff;
+}
+
+.main-wrapper{
+max-width:420px;
+margin:auto;
+padding:20px;
+padding-bottom:120px;
+}
+
+.logo{
+width:120px;
+display:block;
+margin:10px auto;
+animation:float 3s infinite;
+}
+
+@keyframes float{
+50%{transform:translateY(-10px);}
+}
+
+.glow{text-align:center;color:gold;margin:20px 0 10px;}
+
+.card{
+background:rgba(0,0,0,0.6);
+border-radius:15px;
+padding:15px;
+margin-bottom:12px;
+box-shadow:0 0 12px rgba(255,215,0,0.15);
+}
+
+.input{
+width:100%;
+padding:12px;
+border-radius:10px;
+border:none;
+margin-top:5px;
+background:#000;
+color:#ffd700;
+}
+
+.withdraw-btn{
+width:100%;
+padding:14px;
+border:none;
+border-radius:10px;
+background:linear-gradient(90deg,#ffd700,#ffae00);
+font-weight:bold;
+cursor:pointer;
+}
+
+.member{
+background:#1a1a1a;
+padding:10px;
+border-radius:10px;
+margin-top:8px;
+font-size:12px;
+}
+
+.back-btn{
+position:fixed;
+top:15px;
+left:15px;
+padding:10px;
+background:#000;
+color:#ffd700;
+border:1px solid gold;
+border-radius:10px;
+}
+</style>
+</head>
+
+<body onload="initPage()">
+
+<button onclick="goBack()" class="back-btn">⬅</button>
+
+<div class="main-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+<h3 class="glow">WITHDRAW</h3>
+
+<div class="card">
+<p>Available Balance</p>
+<h2 id="balance">₱0.00</h2>
+<p id="earningsText"></p>
+</div>
+
+<div class="card">
+<p>Payment Method</p>
+<select id="method" class="input">
+<option value="">Select</option>
+<option value="GCash">GCash</option>
+</select>
+</div>
+
+<div class="card">
+<p>Account Name</p>
+<input id="accName" class="input">
+</div>
+
+<div class="card">
+<p>Account Number</p>
+<input id="accNumber" class="input">
+</div>
+
+<div class="card">
+<p>Amount (Min ₱150)</p>
+<input id="amount" class="input" type="number" oninput="computeFee()">
+<p id="feeText"></p>
+<p id="receiveText"></p>
+</div>
+
+<button class="withdraw-btn" onclick="withdraw()">Withdraw</button>
+
+<div class="card">
+<h3>My Withdrawals</h3>
+<div id="historyList"></div>
+</div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+const firebaseConfig={
+apiKey:"AIzaSyCMLY-...",
+databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+let currentUser=null;
+let totalDeposit=0;
+let isProcessing=false;
+
+// INIT
+function initPage(){
+currentUser=JSON.parse(localStorage.getItem("currentUser"));
+if(!currentUser) location.href="index.html";
+
+listenUser();
+listenWithdrawals();
+}
+
+// USER REALTIME
+function listenUser(){
+db.ref("users/"+currentUser.uid).on("value",snap=>{
+let d=snap.val();
+if(!d) return;
+
+currentUser.wallet=d.balance||0;
+totalDeposit=d.totalDeposit||0;
+
+balance.innerText=formatPHP(currentUser.wallet);
+
+let earnings=currentUser.wallet-totalDeposit;
+earningsText.innerText="Earnings: "+formatPHP(earnings);
+});
+}
+
+// HISTORY REALTIME
+function listenWithdrawals(){
+db.ref("withdrawals")
+.orderByChild("uid")
+.equalTo(currentUser.uid)
+.on("value",snap=>{
+
+let html="";
+
+snap.forEach(c=>{
+let w=c.val();
+
+html=`
+<div class="member">
+<b>${w.status}</b><br>
+₱${w.amount} → ₱${w.receive}<br>
+${w.method}<br>
+${new Date(w.time).toLocaleString()}
+</div>` + html;
+
+});
+
+historyList.innerHTML=html||"No withdrawals";
+});
+}
+
+// FORMAT
+function formatPHP(a){
+return "₱"+Number(a).toLocaleString('en-PH',{minimumFractionDigits:2});
+}
+
+// FEE
+function computeFee(){
+let amount=parseFloat(amountEl.value);
+if(!amount) return;
+
+let fee=amount*0.10;
+let receive=amount-fee;
+
+feeText.innerText="Fee: "+formatPHP(fee);
+receiveText.innerText="Receive: "+formatPHP(receive);
+}
+
+// DAILY LIMIT
+function canWithdraw(){
+let last=localStorage.getItem("lastWithdraw_"+currentUser.uid);
+return last!==new Date().toDateString();
+}
+
+// WITHDRAW
+function withdraw(){
+
+if(isProcessing) return;
+isProcessing=true;
+
+let method=methodEl.value;
+let name=accNameEl.value.trim();
+let number=accNumberEl.value.trim();
+let amount=parseFloat(amountEl.value);
+
+if(!method||!name||!number){
+alert("Fill all fields"); isProcessing=false; return;
+}
+
+if(!amount||amount<150){
+alert("Minimum ₱150"); isProcessing=false; return;
+}
+
+let earnings=currentUser.wallet-totalDeposit;
+
+if(amount>earnings){
+alert("Earnings only"); isProcessing=false; return;
+}
+
+if(!canWithdraw()){
+alert("Once per day"); isProcessing=false; return;
+}
+
+let fee=amount*0.10;
+let receive=amount-fee;
+
+// CREATE REQUEST
+let ref=db.ref("withdrawals").push();
+
+ref.set({
+id: ref.key,
+uid: currentUser.uid,
+username: currentUser.username||"",
+method,
+accName:name,
+accNumber:number,
+amount,
+fee,
+receive,
+status:"PENDING",
+adminStatus:"WAITING",
+time:Date.now()
+});
+
+// DEDUCT USER WALLET
+db.ref("users/"+currentUser.uid+"/balance")
+.transaction(v=>(v||0)-amount);
+
+// SAVE LIMIT
+localStorage.setItem("lastWithdraw_"+currentUser.uid,new Date().toDateString());
+
+alert("Withdraw submitted! Waiting for admin approval.");
+
+isProcessing=false;
+}
+
+// ELEMENTS
+const methodEl=document.getElementById("method");
+const accNameEl=document.getElementById("accName");
+const accNumberEl=document.getElementById("accNumber");
+const amountEl=document.getElementById("amount");
+
+// BACK
+function goBack(){
+location.href="account.html";
+}
+</script>
+
+</body>
+</html>

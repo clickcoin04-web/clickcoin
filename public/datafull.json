@@ -1,0 +1,47 @@
+{
+  "users": {
+    "adminUID_001": {
+      "mobile": "639123456789",
+      "wallet": 0,
+      "myInviteCode": "ADMIN001",
+      "referredBy": null,
+      "upline1": null,
+      "upline2": null,
+      "upline3": null,
+      "referrals": {
+        "level1": {},
+        "level2": {},
+        "level3": {}
+      },
+      "refEarnings": 0,
+      "role": "admin",
+      "createdAt": 1710000000000
+    },
+
+    "admin-0001": {
+      "username": "ADMIN",
+      "mobile": "ADMIN",
+      "role": "admin",
+      "wallet": 0
+    }
+  },
+
+  "invites": {
+    "ADMIN001": {
+      "uid": "adminUID_001",
+      "createdAt": 1710000000000
+    }
+  },
+
+  "deposits": {},
+
+  "transactions": {},
+
+  "refLogs": {},
+
+  "analytics": {
+    "totalUsers": 1,
+    "totalDeposits": 0,
+    "totalCommissions": 0
+  }
+}

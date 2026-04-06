@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>E-Wallet Setup</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      background: #0f172a;
+      color: white;
+      font-family: Arial;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 15px;
+    }
+
+    .back-btn {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      background: gold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .box {
+      background: #1e293b;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 8px;
+      border: none;
+    }
+
+    .save-btn {
+      width: 100%;
+      padding: 12px;
+      background: gold;
+      border: none;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .wallet-item {
+      background: #020617;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .wallet-info {
+      font-size: 13px;
+    }
+
+    .wallet-actions button {
+      margin-left: 5px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .use-btn { background: gold; }
+    .delete-btn { background: crimson; color: white; }
+  </style>
+</head>
+
+<body onload="init()">
+
+<div class="container">
+
+  <button onclick="goBack()" class="back-btn">←</button>
+  <h2>E-Wallet Setup</h2>
+
+  <!-- FORM -->
+  <div class="box">
+    <p>Payment Method</p>
+    <select id="method">
+      <option value="GCash">GCash</option>
+    </select>
+
+    <p>Account Name</p>
+    <input type="text" id="accName" placeholder="Juan Dela Cruz">
+
+    <p>Account Number</p>
+    <input type="number" id="accNumber" placeholder="09XXXXXXXXX">
+
+    <button class="save-btn" onclick="saveWallet()">Save E-Wallet</button>
+  </div>
+
+  <!-- LIST -->
+  <div class="box">
+    <p>Saved Wallets</p>
+    <div id="walletList"></div>
+  </div>
+
+</div>
+
+<script>
+let currentUser = null;
+
+function goBack() {
+  window.location.href = "account.html";
+}
+
+function init() {
+  currentUser = JSON.parse(localStorage.getItem("currentUser"));
+
+  if (!currentUser) {
+    window.location.href = "index.html";  // Ensure user is logged in
+    return;
+  }
+
+  renderWallets();
+}
+
+// GET ALL WALLETS
+function getWallets() {
+  return JSON.parse(localStorage.getItem("ewallets_" + currentUser.username)) || [];
+}
+
+// SAVE WALLET
+function saveWallet() {
+  let method = document.getElementById("method").value;
+  let name = document.getElementById("accName").value.trim();
+  let number = document.getElementById("accNumber").value.trim();
+
+  if (!name) return alert("Enter a valid name for the account.");
+  if (!number || number.length < 10) return alert("Invalid account number. Please check the number.");
+
+  let wallets = getWallets();
+
+  wallets.push({
+    method,
+    accountName: name,
+    accountNumber: number
+  });
+
+  localStorage.setItem("ewallets_" + currentUser.username, JSON.stringify(wallets));
+
+  // Also set default wallet for withdrawals
+  localStorage.setItem("ewallet_" + currentUser.username, JSON.stringify({
+    method,
+    accountName: name,
+    accountNumber: number
+  }));
+
+  addLog("EWALLET", method + " " + number);
+
+  // Clear input fields after saving
+  document.getElementById("accName").value = "";
+  document.getElementById("accNumber").value = "";
+
+  renderWallets();
+}
+
+// DISPLAY LIST
+function renderWallets() {
+  let container = document.getElementById("walletList");
+  let wallets = getWallets();
+
+  container.innerHTML = "";
+
+  if (wallets.length === 0) {
+    container.innerHTML = "<p style='color:#aaa;'>No saved wallets</p>";
+    return;
+  }
+
+  wallets.forEach((w, index) => {
+    container.innerHTML += `
+      <div class="wallet-item">
+        <div class="wallet-info">
+          ${w.method}<br>
+          ${mask(w.accountNumber)}
+        </div>
+        <div class="wallet-actions">
+          <button class="use-btn" onclick="useWallet(${index})">Use</button>
+          <button class="delete-btn" onclick="deleteWallet(${index})">X</button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+// USE WALLET
+function useWallet(index) {
+  let wallets = getWallets();
+  let w = wallets[index];
+
+  document.getElementById("method").value = w.method;
+  document.getElementById("accName").value = w.accountName;
+  document.getElementById("accNumber").value = w.accountNumber;
+
+  // SET AS DEFAULT FOR WITHDRAW
+  localStorage.setItem("ewallet_" + currentUser.username, JSON.stringify(w));
+}
+
+// DELETE
+function deleteWallet(index) {
+  let wallets = getWallets();
+
+  wallets.splice(index, 1);
+
+  localStorage.setItem("ewallets_" + currentUser.username, JSON.stringify(wallets));
+
+  renderWallets();
+}
+
+// MASK NUMBER
+function mask(num) {
+  return num.substring(0,4) + "****" + num.substring(num.length - 2);
+}
+
+// LOG
+function addLog(type, details = "") {
+  let logs = JSON.parse(localStorage.getItem("logs")) || [];
+
+  logs.push({
+    type,
+    details,
+    date: new Date().toLocaleString()
+  });
+
+  localStorage.setItem("logs", JSON.stringify(logs));
+}
+</script>
+
+</body>
+</html>

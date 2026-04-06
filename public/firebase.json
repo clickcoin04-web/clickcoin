@@ -1,0 +1,48 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+      "uid": "123456",
+  "username": "juan"
+    ]
+  }
+}
+{
+  "users": {
+    "uid123": {
+      "mobile": "639123456789",
+      "wallet": 0,
+      "myInviteCode": "CC123ABC",
+      "referredBy": "CC999AAA",
+      "upline1": "uidA",
+      "upline2": "uidB",
+      "upline3": "uidC",
+      "referrals": {
+        "level1": {},
+        "level2": {},
+        "level3": {}
+      },
+      "refEarnings": 0
+    }
+  }
+}
+
+{
+  "users": {},
+  "deposits": {
+    "depId123": {
+      "uid": "userUID",
+      "amount": 1000,
+      "status": "pending",
+      "gcashName": "Juan",
+      "gcashNumber": "09xxxx",
+      "time": 1710000000
+    }
+  },
+  "transactions": {},
+  "refLogs": {},
+  "analytics": {}
+}

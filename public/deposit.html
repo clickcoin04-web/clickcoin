@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deposit - ClickCoin</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: url("./BackgroundCC.jpg") no-repeat center center/cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(6px);
+}
+.main-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+  text-align: center;
+}
+.logo {
+  width: 120px;
+  margin-bottom: 10px;
+  animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px gold);
+}
+@keyframes float { 50% { transform: translateY(-10px); } }
+h2 { color: gold; text-shadow: 0 0 8px gold; }
+.balance {
+  background: #1e293b;
+  padding: 14px;
+  border-radius: 14px;
+  margin-bottom: 15px;
+  font-weight: bold;
+  color: #00ffcc;
+}
+.amount-grid {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 10px;
+}
+.amount-grid button {
+  padding: 12px;
+  border-radius: 12px;
+  background: #1e293b;
+  color: white;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+}
+.amount-grid button:hover {
+  background: gold;
+  color: black;
+}
+.amount-input {
+  width: 100%;
+  padding: 14px;
+  margin-top: 12px;
+  border-radius: 12px;
+  border: none;
+  background: #0f172a;
+  color: white;
+  font-size: 16px;
+}
+.btn {
+  width: 100%;
+  margin-top: 15px;
+  padding: 16px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(45deg, gold, orange);
+  font-weight: bold;
+  cursor: pointer;
+}
+.note {
+  margin-top: 15px;
+  font-size: 12px;
+  color: #ccc;
+}
+.history {
+  margin-top: 15px;
+  text-align: left;
+}
+.card {
+  background:#1a1a1a;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:6px;
+  font-size:12px;
+}
+.back-btn {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  padding: 10px;
+  background: gold;
+  border: none;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<button onclick="goBack()" class="back-btn">←</button>
+
+<div class="main-wrapper">
+  <img src="./LOGOClickCoin.png" class="logo">
+  <h2>DEPOSIT</h2>
+
+  <div class="balance" id="wallet">₱0</div>
+
+  <p style="color:#aaa;">Select Amount</p>
+
+  <div class="amount-grid">
+    <button onclick="setAmount(300)">₱300</button>
+    <button onclick="setAmount(500)">₱500</button>
+    <button onclick="setAmount(1000)">₱1,000</button>
+    <button onclick="setAmount(2000)">₱2,000</button>
+    <button onclick="setAmount(5000)">₱5,000</button>
+    <button onclick="setAmount(10000)">₱10,000</button>
+    <button onclick="setAmount(15000)">₱15,000</button>
+    <button onclick="setAmount(20000)">₱20,000</button>
+    <button onclick="setAmount(25000)">₱25,000</button>
+    <button onclick="setAmount(30000)">₱30,000</button>
+    <button onclick="setAmount(40000)">₱40,000</button>
+    <button onclick="setAmount(50000)">₱50,000</button>
+  </div>
+
+  <input type="number" id="amount" class="amount-input" placeholder="Enter amount">
+
+  <button class="btn" onclick="payNow()">PROCEED TO GCASH</button>
+
+  <div class="note">
+    • Pay via GCash (PayMongo)<br>
+    • Auto credit after payment<br>
+    • Processing: instant to few minutes
+  </div>
+
+  <div class="history">
+    <h3 style="color:gold;">My Deposits</h3>
+    <div id="depositList"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let currentUser = null;
+let isPaying = false;
+
+function formatPHP(x){
+  return "₱" + Number(x).toLocaleString('en-PH');
+}
+
+function initPage(){
+  currentUser = JSON.parse(localStorage.getItem("currentUser"));
+
+  if(!currentUser || !currentUser.uid){
+    location.href = "index.html";
+    return;
+  }
+
+  db.ref("users/" + currentUser.uid).on("value", snap=>{
+    let d = snap.val();
+    if(!d) return;
+    currentUser.wallet = d.wallet || 0;
+    localStorage.setItem("currentUser", JSON.stringify(currentUser));
+    wallet.innerText = formatPHP(currentUser.wallet);
+  });
+
+  db.ref("deposits").on("value", snap=>{
+    let html="";
+    snap.forEach(c=>{
+      let d=c.val();
+      if(d.uid!==currentUser.uid) return;
+      html+=`<div class="card">₱${d.amount}<br>${new Date(d.time).toLocaleString()}<br>Status: ${d.status}</div>`;
+    });
+    depositList.innerHTML=html;
+  });
+
+  checkReturnPayment();
+}
+
+window.onload = initPage;
+
+function setAmount(val){
+  amount.value = val;
+}
+
+async function fetchWithRetry(url, options, retries=3){
+  try{
+    const res = await fetch(url, options);
+    if(!res.ok) throw new Error("Request failed");
+    return res;
+  }catch(e){
+    if(retries === 0) throw e;
+    await new Promise(r => setTimeout(r, 2000));
+    return fetchWithRetry(url, options, retries-1);
+  }
+}
+
+async function payNow(){
+
+  if(isPaying) return;
+  isPaying = true;
+
+  let amt = Number(amount.value);
+
+  if(!amt || amt < 50){
+    alert("Minimum ₱50");
+    isPaying=false;
+    return;
+  }
+
+  alert("Connecting to payment server...");
+
+  try{
+
+    const res = await fetchWithRetry("/.netlify/functions/createPayment", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        amount: amt,
+        uid: currentUser.uid
+      })
+    });
+
+    const data = await res.json();
+
+    if(!data || !data.checkout_url){
+      alert("Payment error");
+      isPaying=false;
+      return;
+    }
+
+    localStorage.setItem("pendingDeposit", JSON.stringify({
+      amount: amt,
+      time: Date.now()
+    }));
+
+    window.location.href = data.checkout_url;
+
+  }catch(e){
+    console.error(e);
+    alert("Server busy, please try again.");
+  }
+
+  isPaying=false;
+}
+
+async function checkReturnPayment(){
+
+  const params = new URLSearchParams(location.search);
+  const status = params.get("status");
+
+  if(status !== "success") return;
+
+  let pending = JSON.parse(localStorage.getItem("pendingDeposit"));
+  if(!pending) return;
+
+  let key = currentUser.uid + "_" + pending.time;
+
+  let existing = await db.ref("deposits/"+key).once("value");
+  if(existing.exists()) return;
+
+  db.ref("deposits/"+key).set({
+    uid: currentUser.uid,
+    username: currentUser.username,
+    amount: pending.amount,
+    status:"PENDING",
+    time: Date.now()
+  });
+
+  localStorage.removeItem("pendingDeposit");
+
+  alert("Payment received! Waiting for confirmation.");
+}
+
+function goBack(){
+  location.href="account.html";
+}
+</script>
+
+</body>
+</html>

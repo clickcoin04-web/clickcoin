@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Withdrawal History - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:url("BackgroundCC.jpg") no-repeat center/cover;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.75);
+}
+
+.main-wrapper{
+  position:relative;
+  z-index:1;
+  max-width:420px;
+  margin:auto;
+  padding:20px;
+}
+
+.logo{
+  width:120px;
+  display:block;
+  margin:auto;
+}
+
+h3{
+  color:gold;
+  text-align:center;
+}
+
+.card{
+  background:#1a1a1a;
+  padding:12px;
+  border-radius:10px;
+  margin-bottom:10px;
+  font-size:13px;
+}
+
+.back-btn{
+  position:fixed;
+  top:15px;
+  left:15px;
+  z-index:999;
+  padding:10px;
+  border-radius:10px;
+  background:gold;
+  border:none;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<button class="back-btn" onclick="goBack()">←</button>
+
+<div class="main-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+
+<h3>WITHDRAWAL HISTORY</h3>
+
+<div id="withdrawList"></div>
+
+</div>
+
+<!-- FIREBASE V8 (MATCH SA SYSTEM MO) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+// ==============================
+// 🔥 FIREBASE CONFIG
+// ==============================
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ==============================
+// 🔥 INIT
+// ==============================
+let currentUser;
+
+function init(){
+  currentUser = JSON.parse(localStorage.getItem("currentUser"));
+
+  if(!currentUser){
+    location.href="index.html";
+    return;
+  }
+
+  listenWithdrawals();
+}
+
+// ==============================
+// 🔥 REALTIME WITHDRAWALS
+// ==============================
+function listenWithdrawals(){
+
+  db.ref("withdrawals").on("value", snap=>{
+
+    let list = document.getElementById("withdrawList");
+    list.innerHTML = "";
+
+    let arr = [];
+
+    snap.forEach(child=>{
+      let w = child.val();
+
+      if(w.uid === currentUser.uid){
+        arr.push(w);
+      }
+    });
+
+    // latest first
+    arr.sort((a,b)=>b.time - a.time);
+
+    if(arr.length === 0){
+      list.innerHTML = `<div class="card">No withdrawals yet</div>`;
+      return;
+    }
+
+    arr.forEach(w=>{
+
+      let color = "#ccc";
+
+      if(w.status === "APPROVED") color = "lightgreen";
+      if(w.status === "REJECTED") color = "red";
+      if(w.status === "PENDING") color = "orange";
+
+      list.innerHTML += `
+      <div class="card">
+        <p><b>Amount:</b> ₱${Number(w.amount).toLocaleString()}</p>
+        <p><b>Receive:</b> ₱${Number(w.receive).toLocaleString()}</p>
+        <p><b>Method:</b> ${w.method}</p>
+        <p><b>Date:</b> ${new Date(w.time).toLocaleString()}</p>
+        <p><b>Status:</b> <span style="color:${color}">${w.status}</span></p>
+      </div>
+      `;
+    });
+
+  });
+
+}
+
+// ==============================
+// 🔙 BACK
+// ==============================
+function goBack(){
+  location.href="account.html";
+}
+
+// ==============================
+window.onload = init;
+</script>
+
+</body>
+</html>

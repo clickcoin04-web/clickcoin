@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCash Payment - ClickCoin</title>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
+<style>
+body {
+  margin:0;
+  font-family:Arial;
+  background:url("BackgroundCC.jpg") no-repeat center/cover;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+}
+.main-wrapper{
+  position:relative;
+  z-index:1;
+  width:100%;
+  max-width:420px;
+  padding:20px;
+  text-align:center;
+}
+.logo{
+  width:120px;
+}
+h2{color:gold;}
+
+.box{
+  background:#1e293b;
+  padding:15px;
+  border-radius:12px;
+  margin-top:10px;
+}
+
+.amount{
+  font-size:24px;
+  color:gold;
+  font-weight:bold;
+}
+
+.qr{
+  width:200px;
+  border-radius:12px;
+  margin:15px auto;
+}
+
+.input{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border-radius:10px;
+  border:none;
+  background:#0f172a;
+  color:white;
+}
+
+.btn{
+  width:100%;
+  margin-top:12px;
+  padding:14px;
+  border:none;
+  border-radius:12px;
+  background:linear-gradient(45deg,gold,orange);
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.pay-btn{
+  background:#007dff;
+  color:white;
+}
+
+.back-btn{
+  position:fixed;
+  top:10px;
+  left:10px;
+  background:gold;
+  border:none;
+  padding:10px;
+  border-radius:10px;
+}
+</style>
+</head>
+
+<body onload="initPage()">
+
+<button class="back-btn" onclick="goBack()">←</button>
+
+<div class="main-wrapper">
+  <img src="LOGOClickCoin.png" class="logo">
+  <h2>GCASH PAYMENT</h2>
+
+  <div class="box">
+    <p>Send Exact Amount:</p>
+    <div id="amount" class="amount">₱0</div>
+
+    <!-- QR -->
+    <img src="gcash-qr.png" class="qr">
+
+    <!-- ACCOUNT DETAILS -->
+    <input class="input" id="gcashName" placeholder="Your GCash Name">
+    <input class="input" id="gcashNumber" placeholder="Your GCash Number">
+
+    <!-- RECEIPT -->
+    <input type="file" id="receipt" class="input">
+
+    <p style="margin-top:10px;">
+      <b>Receiver:</b> YOUR NAME<br>
+      <b>Number:</b> 09XXXXXXXXX
+    </p>
+  </div>
+
+  <!-- OPEN GCASH -->
+  <button class="btn pay-btn" onclick="openGCashApp()">
+    PAY ON GCASH APP
+  </button>
+
+  <!-- CONFIRM -->
+  <button class="btn" onclick="confirmPayment()">
+    I HAVE PAID
+  </button>
+
+</div>
+
+<script>
+// ==========================
+// 🔥 FIREBASE INIT
+// ==========================
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+  storageBucket: "clickcoin-81040.firebasestorage.app"
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const db = firebase.database();
+const storage = firebase.storage();
+
+// ==========================
+// GLOBAL
+// ==========================
+let currentUser = null;
+let depositAmount = 0;
+let depositId = null;
+
+// ==========================
+// FORMAT
+// ==========================
+function formatPHP(x){
+  return "₱" + Number(x).toLocaleString('en-PH');
+}
+
+// ==========================
+// INIT PAGE
+// ==========================
+function initPage(){
+
+  currentUser = JSON.parse(localStorage.getItem("currentUser"));
+  depositAmount = Number(localStorage.getItem("depositAmount"));
+  depositId = localStorage.getItem("depositId");
+
+  if(!currentUser){
+    alert("Login expired");
+    window.location.href = "login.html";
+    return;
+  }
+
+  if(!depositAmount || depositAmount <= 0){
+    alert("No amount selected");
+    window.location.href = "deposit.html";
+    return;
+  }
+
+  document.getElementById("amount").innerText = formatPHP(depositAmount);
+}
+
+// ==========================
+// OPEN GCASH APP
+// ==========================
+function openGCashApp(){
+  const receiver = "639XXXXXXXXX";
+
+  window.location.href = `gcash://send?number=${receiver}&amount=${depositAmount}`;
+
+  setTimeout(()=>{
+    window.location.href="https://www.gcash.com/";
+  },2000);
+}
+
+// ==========================
+// CONFIRM PAYMENT
+// ==========================
+function confirmPayment(){
+
+  let name = document.getElementById("gcashName").value;
+  let number = document.getElementById("gcashNumber").value;
+  let file = document.getElementById("receipt").files[0];
+
+  if(!name || !number){
+    alert("Enter GCash details");
+    return;
+  }
+
+  if(!file){
+    alert("Upload receipt");
+    return;
+  }
+
+  let fileName = "receipt_" + currentUser.uid + "_" + Date.now();
+  let ref = storage.ref("receipts/" + fileName);
+
+  ref.put(file)
+  .then(s=>s.ref.getDownloadURL())
+  .then(url=>{
+    return db.ref("deposits/" + depositId).update({
+      gcashName: name,
+      gcashNumber: number,
+      receipt: url,
+      status: "PENDING_CONFIRMATION",
+      confirmedAt: Date.now()
+    });
+  })
+  .then(()=>{
+    return db.ref("logs").push({
+      type:"deposit",
+      uid: currentUser.uid,
+      amount: Number(depositAmount),
+      status:"PENDING",
+      time: Date.now()
+    });
+  })
+  .then(()=>{
+    alert("✅ Payment Submitted!\nWaiting for admin approval");
+
+    localStorage.removeItem("depositAmount");
+    localStorage.removeItem("depositId");
+
+    window.location.href="account.html";
+  })
+  .catch(err=>{
+    console.error(err);
+    alert("Upload failed");
+  });
+}
+
+// ==========================
+// BACK
+// ==========================
+function goBack(){
+  window.location.href="deposit.html";
+}
+</script>
+
+</body>
+</html>

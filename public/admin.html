@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - ClickCoin</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: url('BackgroundCC.jpg') no-repeat center center/cover;
+}
+
+.main-wrapper {
+  background: rgba(0,0,0,0.85);
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.container { width:100%; max-width:420px; }
+
+.logo { text-align:center; margin-bottom:10px; animation:float 3s infinite; }
+.logo img { width:120px; }
+
+@keyframes float { 50% { transform: translateY(-8px);} }
+
+.top-row { display:flex; justify-content:flex-end; margin-bottom:10px; }
+
+.notif-btn {
+  background: gold;
+  padding: 8px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.menu {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:10px;
+}
+
+.menu button {
+  flex:1 1 30%;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  background:#222;
+  color:gold;
+  font-size:11px;
+  cursor:pointer;
+}
+
+.main-box {
+  background:#111;
+  border-radius:12px;
+  padding:12px;
+  height:340px;
+  overflow-y:auto;
+  margin-bottom:10px;
+}
+
+.section { display:none; }
+
+.section-title { color:gold; margin-bottom:8px; }
+
+.card {
+  background:#1a1a1a;
+  padding:10px;
+  border-radius:10px;
+  margin-bottom:8px;
+  color:white;
+  font-size:12px;
+}
+
+.card button {
+  margin-top:6px;
+  padding:6px;
+  border:none;
+  border-radius:6px;
+  font-size:11px;
+  cursor:pointer;
+}
+
+.approve { background:green; color:white; }
+.reject { background:red; color:white; }
+.delete { background:#444; color:white; }
+
+.modal {
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.8);
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:999;
+}
+
+.modal-box {
+  background:#111;
+  padding:15px;
+  border-radius:10px;
+  width:90%;
+  max-width:350px;
+  color:white;
+}
+
+.invite-box {
+  background:#111;
+  padding:10px;
+  border-radius:10px;
+}
+
+.invite-box input {
+  width:100%;
+  padding:8px;
+  border-radius:8px;
+  border:none;
+  margin-bottom:6px;
+  background:#222;
+  color:gold;
+}
+
+.copy-btn {
+  width:100%;
+  padding:10px;
+  background:gold;
+  border:none;
+  border-radius:10px;
+}
+
+.logout-btn {
+  width:100%;
+  padding:12px;
+  background:red;
+  color:white;
+  border:none;
+  border-radius:10px;
+  margin-top:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="loadingScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;">
+Loading...
+</div>
+
+<div class="main-wrapper">
+<div class="container">
+
+<div class="logo">
+<img src="LOGOClickCoin.png">
+</div>
+
+<div class="top-row">
+<div class="notif-btn">🔔 <span id="notifBadge">0</span></div>
+</div>
+
+<div class="menu">
+<button onclick="showSection('users')">👥 Users</button>
+<button onclick="showSection('deposit')">📥 Deposits</button>
+<button onclick="showSection('withdraw')">💸 Withdraw</button>
+<button onclick="showSection('stats')">📊 Stats</button>
+<button onclick="showSection('logs')">💬 Chat</button>
+</div>
+
+<div class="main-box">
+<div id="users" class="section"></div>
+<div id="deposit" class="section"><div id="depositList"></div></div>
+<div id="withdraw" class="section"><div id="withdrawList"></div></div>
+<div id="stats" class="section"></div>
+<div id="logs" class="section"></div>
+</div>
+
+<div class="invite-box">
+<div class="section-title">🔗 Admin Invite</div>
+<input id="inviteCode" readonly>
+<input id="inviteLink" readonly>
+<button class="copy-btn" onclick="copyInvite()">COPY</button>
+</div>
+
+<button class="logout-btn" onclick="logout()">LOGOUT</button>
+
+</div>
+</div>
+
+<div id="userModal" class="modal">
+<div class="modal-box" id="userDetails"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const user = JSON.parse(localStorage.getItem("currentUser"));
+if (!user || user.role !== "admin") location.replace("index.html");
+
+document.getElementById("loadingScreen").style.display="none";
+
+// USERS
+onValue(ref(db,"users"), snap=>{
+let arr=[];
+snap.forEach(c=> arr.push({id:c.key,...c.val()}));
+arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+
+let html="<div class='section-title'>Users</div>";
+arr.forEach(u=>{
+html+=`
+<div class="card">
+<b onclick="viewUser('${u.id}')">${u.username||"N/A"}</b><br>
+📱 ${u.mobile||"N/A"}<br>
+💰 ₱${u.wallet||0}<br>
+📅 ${format(u.createdAt)}
+<button class="delete" onclick="deleteUser('${u.id}')">Remove</button>
+</div>`;
+});
+users.innerHTML=html;
+});
+
+window.deleteUser=id=>{
+if(confirm("Delete user?")){
+remove(ref(db,"users/"+id));
+}
+};
+
+window.viewUser=async(id)=>{
+const snap=await get(ref(db,"users/"+id));
+if(!snap.exists()) return;
+
+const u=snap.val();
+userDetails.innerHTML=`
+<h3>${u.username}</h3>
+📱 ${u.mobile}<br>
+💰 Wallet: ₱${u.wallet||0}<br>
+📥 Deposit: ₱${u.totalDeposit||0}<br>
+📅 Joined: ${format(u.createdAt)}
+<button onclick="closeModal()">Close</button>
+`;
+userModal.style.display="flex";
+};
+
+window.closeModal=()=>userModal.style.display="none";
+
+// DEPOSITS
+onValue(ref(db,"deposits"), snap=>{
+let html="<div class='section-title'>Deposits</div>";
+let notif=0;
+
+snap.forEach(c=>{
+const d=c.val(),id=c.key;
+if(!d) return;
+if(d.status==="PENDING") notif++;
+
+html+=`
+<div class="card">
+${d.username||"N/A"}<br>
+₱${d.amount||0}<br>
+📅 ${format(d.time)}<br>
+📱 ${d.number||"N/A"}<br>
+${d.status||"PENDING"}
+<button class="approve" onclick="approveDeposit('${id}')">Approve</button>
+<button class="reject" onclick="rejectDeposit('${id}')">Reject</button>
+</div>`;
+});
+
+depositList.innerHTML=html;
+notifBadge.innerText=notif;
+});
+
+window.approveDeposit=async(id)=>{
+const snap=await get(ref(db,"deposits/"+id));
+if(!snap.exists()) return;
+const dep=snap.val();
+if(dep.status!=="PENDING") return;
+
+const userRef=ref(db,"users/"+dep.uid);
+const userSnap=await get(userRef);
+if(!userSnap.exists()) return;
+const u=userSnap.val();
+
+await update(userRef,{
+wallet:(u.wallet||0)+dep.amount,
+totalDeposit:(u.totalDeposit||0)+dep.amount,
+depositTime:Date.now()
+});
+
+await update(ref(db,"deposits/"+id),{
+status:"APPROVED",
+time:Date.now()
+});
+};
+
+window.rejectDeposit=async(id)=>{
+await update(ref(db,"deposits/"+id),{status:"REJECTED"});
+};
+
+// WITHDRAW
+onValue(ref(db,"withdrawals"), snap=>{
+let html="<div class='section-title'>Withdrawals</div>";
+
+snap.forEach(c=>{
+const w=c.val(),id=c.key;
+if(!w) return;
+
+html+=`
+<div class="card">
+${w.username||"N/A"}<br>
+₱${w.amount||0}<br>
+📅 ${format(w.time)}<br>
+${w.status||"PENDING"}
+<button class="approve" onclick="approveWithdraw('${id}')">Approve</button>
+<button class="reject" onclick="rejectWithdraw('${id}')">Reject</button>
+</div>`;
+});
+
+withdrawList.innerHTML=html;
+});
+
+window.approveWithdraw=async(id)=>{
+const snap=await get(ref(db,"withdrawals/"+id));
+if(!snap.exists()) return;
+const w=snap.val();
+if(w.status!=="PENDING") return;
+
+if(w.amount<150){
+alert("Minimum ₱150");
+return;
+}
+
+const userRef=ref(db,"users/"+w.uid);
+const userSnap=await get(userRef);
+if(!userSnap.exists()) return;
+const u=userSnap.val();
+
+const now=Date.now();
+if(now - (u.depositTime||0) < 100*24*60*60*1000){
+alert("Deposit locked for 100 days");
+return;
+}
+
+let earnings=(u.wallet||0)-(u.totalDeposit||0);
+
+if(w.amount>earnings){
+alert("Not allowed");
+return;
+}
+
+await update(userRef,{
+wallet:(u.wallet||0)-w.amount
+});
+
+await update(ref(db,"withdrawals/"+id),{
+status:"APPROVED"
+});
+};
+
+window.rejectWithdraw=id=>{
+update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
+};
+
+// STATS
+onValue(ref(db,"users"), snap=>{
+let totalUsers=0,totalMoney=0;
+snap.forEach(c=>{
+const u=c.val();
+totalUsers++;
+totalMoney+=(u.wallet||0);
+});
+
+stats.innerHTML=`
+<div class="section-title">Stats</div>
+👥 Members: ${totalUsers}<br>
+💰 Total Money: ₱${totalMoney.toLocaleString()}
+`;
+});
+
+// CHAT
+onValue(ref(db,"chat"), snap=>{
+let html="<div class='section-title'>Chat</div>";
+snap.forEach(c=>{
+const m=c.val();
+if(!m) return;
+html+=`<div class="card">${m.user}: ${m.msg}</div>`;
+});
+logs.innerHTML=html;
+});
+
+function format(t){
+if(!t) return "N/A";
+return new Date(t).toLocaleString();
+}
+</script>
+
+<script>
+function showSection(id){
+document.querySelectorAll(".section").forEach(s=>s.style.display="none");
+document.getElementById(id).style.display="block";
+}
+
+function logout(){
+localStorage.removeItem("currentUser");
+location.replace("index.html");
+}
+
+function copyInvite(){
+navigator.clipboard.writeText(inviteLink.value);
+alert("Copied");
+}
+
+function generateInvite(){
+const code="ADMIN"+Math.floor(Math.random()*9999);
+inviteCode.value=code;
+inviteLink.value=location.origin+"/register.html?ref="+code;
+}
+
+window.onload=()=>{
+generateInvite();
+showSection("users");
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transaction History - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:url("BackgroundCC.jpg") no-repeat center/cover;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.75);
+}
+
+.main-wrapper{
+  position:relative;
+  z-index:1;
+  max-width:420px;
+  margin:auto;
+  padding:20px;
+}
+
+.logo{
+  width:120px;
+  display:block;
+  margin:auto;
+}
+
+h3{
+  color:gold;
+  text-align:center;
+}
+
+.card{
+  background:#1a1a1a;
+  padding:12px;
+  border-radius:10px;
+  margin-bottom:10px;
+  font-size:13px;
+}
+
+.empty{
+  text-align:center;
+  margin-top:20px;
+  opacity:0.7;
+}
+
+.back-btn{
+  position:fixed;
+  top:15px;
+  left:15px;
+  padding:10px;
+  background:gold;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<button class="back-btn" onclick="goBack()">←</button>
+
+<div class="main-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+
+<h3>TRANSACTION HISTORY</h3>
+
+<div id="historyList"></div>
+<div id="emptyState" class="empty">No transactions yet</div>
+
+</div>
+
+<!-- FIREBASE -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+// ==============================
+// 🔥 FIREBASE CONFIG
+// ==============================
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ==============================
+let currentUser;
+
+// INIT
+function init(){
+  currentUser = JSON.parse(localStorage.getItem("currentUser"));
+
+  if(!currentUser){
+    location.href="index.html";
+    return;
+  }
+
+  loadAllTransactions();
+}
+
+// ==============================
+// 🔥 LOAD ALL TRANSACTIONS
+// ==============================
+function loadAllTransactions(){
+
+  const list = document.getElementById("historyList");
+  const empty = document.getElementById("emptyState");
+
+  let all = [];
+
+  // 1. WITHDRAWALS
+  db.ref("withdrawals").on("value", snap=>{
+    snap.forEach(c=>{
+      let w = c.val();
+      if(w.uid === currentUser.uid){
+        all.push({
+          type:"WITHDRAW",
+          amount:w.amount,
+          time:w.time,
+          status:w.status
+        });
+      }
+    });
+
+    render();
+  });
+
+  // 2. DEPOSITS (kung meron ka)
+  db.ref("deposits").on("value", snap=>{
+    snap.forEach(c=>{
+      let d = c.val();
+      if(d.uid === currentUser.uid){
+        all.push({
+          type:"DEPOSIT",
+          amount:d.amount,
+          time:d.time,
+          status:"SUCCESS"
+        });
+      }
+    });
+
+    render();
+  });
+
+  // 3. EARNINGS (galing sa wallet growth)
+  db.ref("users/"+currentUser.uid+"/earnings").on("value", snap=>{
+    let earnings = snap.val() || {};
+
+    for(let key in earnings){
+      let e = earnings[key];
+      all.push({
+        type:"EARN",
+        amount:e.amount,
+        time:e.time,
+        status:"COMPLETED"
+      });
+    }
+
+    render();
+  });
+
+  // ==========================
+  function render(){
+
+    list.innerHTML="";
+
+    if(all.length===0){
+      empty.style.display="block";
+      return;
+    }
+
+    empty.style.display="none";
+
+    // SORT LATEST
+    all.sort((a,b)=>b.time-a.time);
+
+    all.forEach(tx=>{
+
+      let color="white";
+
+      if(tx.type==="DEPOSIT") color="lightgreen";
+      if(tx.type==="WITHDRAW") color="orange";
+      if(tx.type==="EARN") color="gold";
+
+      list.innerHTML+=`
+      <div class="card">
+        <p><b style="color:${color}">${tx.type}</b></p>
+        <p>₱${Number(tx.amount).toLocaleString()}</p>
+        <p>${new Date(tx.time).toLocaleString()}</p>
+        <p>Status: ${tx.status}</p>
+      </div>
+      `;
+    });
+
+  }
+
+}
+
+// ==============================
+function goBack(){
+  location.href="account.html";
+}
+
+window.onload=init;
+</script>
+
+</body>
+</html>

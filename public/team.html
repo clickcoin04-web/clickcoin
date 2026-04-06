@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+margin:0;
+font-family:Arial, sans-serif;
+background:url('BackgroundCC.jpg') no-repeat center/cover;
+color:#fff;
+}
+
+.main-wrapper{
+max-width:420px;
+margin:auto;
+padding:20px;
+padding-bottom:120px;
+}
+
+.logo{
+width:120px;
+display:block;
+margin:10px auto;
+animation:float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0);}
+50%{transform:translateY(-8px);}
+100%{transform:translateY(0);}
+}
+
+.glow{text-align:center;color:gold;margin:20px 0 10px;}
+
+.card{
+background:rgba(0,0,0,0.6);
+border-radius:15px;
+padding:18px;
+box-shadow:0 0 12px rgba(255,215,0,0.15);
+margin-bottom:15px;
+backdrop-filter:blur(6px);
+}
+
+.card-info{display:flex;flex-direction:column;gap:6px;}
+
+.task-list{
+display:flex;
+flex-direction:column;
+gap:15px;
+}
+
+.menu-card{cursor:pointer;transition:0.2s;}
+.menu-card:active{transform:scale(0.96);}
+
+.member{
+display:flex;
+justify-content:space-between;
+padding:10px;
+background:rgba(255,255,255,0.1);
+border-radius:10px;
+margin-top:10px;
+}
+
+.invite-box{
+background:linear-gradient(135deg,#0f172a,#1e293b);
+border:1px solid rgba(255,215,0,0.3);
+border-radius:12px;
+padding:10px;
+box-shadow:0 0 12px rgba(255,215,0,0.2);
+}
+
+.input-field{
+width:100%;
+padding:10px;
+border-radius:10px;
+border:none;
+margin-top:6px;
+background:#000;
+color:#ffd700;
+font-weight:bold;
+text-align:center;
+}
+
+.buy-btn{
+margin-top:12px;
+width:100%;
+padding:12px;
+border:none;
+border-radius:10px;
+background:linear-gradient(90deg,#ffd700,#ffae00);
+color:#000;
+font-weight:bold;
+cursor:pointer;
+}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+
+<body>
+
+<div class="main-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+<h3 class="glow">TEAM DASHBOARD</h3>
+
+<!-- SUMMARY -->
+<div class="task-list">
+<div class="card"><div class="card-info">💰 Total Deposit <h3 id="teamDeposit">₱0.00</h3></div></div>
+<div class="card"><div class="card-info">👥 Team Size <h3 id="teamSize">0</h3></div></div>
+<div class="card"><div class="card-info">📊 Total Referrals <h3 id="totalRefs">0</h3></div></div>
+<div class="card"><div class="card-info">💸 Referral Earnings <h3 id="refEarnings">₱0.00</h3></div></div>
+</div>
+
+<!-- REFERRALS -->
+<div class="card">
+<div class="card-info">
+<h3>📋 My Referrals</h3>
+<div id="refList"></div>
+</div>
+</div>
+
+<h3 class="glow">TEAM LEVELS</h3>
+
+<div class="task-list">
+<div class="card menu-card" onclick="openLevel(1)">
+<div class="card-info">Level 1 <h3 id="lvl1Size">0</h3></div>
+</div>
+
+<div class="card menu-card" onclick="openLevel(2)">
+<div class="card-info">Level 2 <h3 id="lvl2Size">0</h3></div>
+</div>
+
+<div class="card menu-card" onclick="openLevel(3)">
+<div class="card-info">Level 3 <h3 id="lvl3Size">0</h3></div>
+</div>
+</div>
+
+<h3 class="glow">INVITATION</h3>
+
+<div class="task-list">
+
+<div class="invite-box">
+<p>🔗 Invite Link</p>
+<input id="inviteLink" class="input-field" readonly onclick="openLink()">
+<button class="buy-btn" onclick="copyLink()">Copy Link</button>
+</div>
+
+<div class="invite-box">
+<p>🎟 Invite Code</p>
+<input id="inviteCode" class="input-field" readonly onclick="copyCode()">
+<button class="buy-btn" onclick="copyCode()">Copy Code</button>
+</div>
+
+</div>
+
+</div>
+
+<!-- MENU -->
+<div class="bottom-menu">
+<div class="menu-item" onclick="location.href='home.html'">HOME</div>
+<div class="menu-item" onclick="location.href='task.html'">TASK</div>
+<div class="menu-item active">TEAM</div>
+<div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
+</div>
+
+<script>
+// ================= CONFIG =================
+const firebaseConfig = {
+apiKey: "AIzaSyCMLY-...",
+databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ================= USER =================
+function getUser(){
+return JSON.parse(localStorage.getItem("currentUser")||"null");
+}
+
+// ================= INVITE =================
+async function generateInvite(){
+const user = getUser();
+if(!user) return;
+
+const snap = await db.ref("users/"+user.uid).once("value");
+let data = snap.val() || {};
+let code = data.myInviteCode;
+
+if(!code){
+code = "CC"+user.uid.substring(0,6).toUpperCase();
+await db.ref("users/"+user.uid).update({myInviteCode:code});
+await db.ref("invites/"+code).set({uid:user.uid});
+}
+
+document.getElementById("inviteCode").value = code;
+document.getElementById("inviteLink").value = location.origin+"/register.html?ref="+code;
+
+user.myInviteCode = code;
+localStorage.setItem("currentUser", JSON.stringify(user));
+}
+
+// ================= LEVEL NAV =================
+function openLevel(level){
+localStorage.setItem("teamLevel", level);
+location.href="team-list.html";
+}
+
+// ================= LOAD TEAM =================
+function loadTeam(){
+const user = getUser();
+if(!user) return;
+
+db.ref("users").on("value", snap=>{
+const users = snap.val();
+if(!users) return;
+
+let lvl1=[],lvl2=[],lvl3=[];
+let total=0;
+
+// BUILD TREE
+Object.values(users).forEach(u=>{
+if(u.referredBy === user.myInviteCode){
+lvl1.push(u);
+total += u.totalDeposit||0;
+}
+});
+
+lvl1.forEach(u1=>{
+Object.values(users).forEach(u=>{
+if(u.referredBy === u1.myInviteCode){
+lvl2.push(u);
+total += u.totalDeposit||0;
+}
+});
+});
+
+lvl2.forEach(u2=>{
+Object.values(users).forEach(u=>{
+if(u.referredBy === u2.myInviteCode){
+lvl3.push(u);
+total += u.totalDeposit||0;
+}
+});
+});
+
+// UPDATE UI
+lvl1Size.innerText = lvl1.length;
+lvl2Size.innerText = lvl2.length;
+lvl3Size.innerText = lvl3.length;
+
+teamSize.innerText = lvl1.length+lvl2.length+lvl3.length;
+teamDeposit.innerText = "₱"+total.toFixed(2);
+totalRefs.innerText = lvl1.length;
+
+// REF LIST
+renderRefList(lvl1);
+
+// EARNINGS
+computeEarnings(lvl1,lvl2,lvl3);
+
+// AUTO COMMISSION
+applyCommission(lvl1,lvl2,lvl3,user);
+});
+}
+
+// ================= RENDER =================
+function renderRefList(list){
+let html="";
+list.forEach(u=>{
+html += `<div class="member">
+<span>${u.email||"User"}</span>
+<span>₱${u.totalDeposit||0}</span>
+</div>`;
+});
+document.getElementById("refList").innerHTML = html || "No referrals";
+}
+
+// ================= EARNINGS =================
+function computeEarnings(l1,l2,l3){
+let total =
+l1.reduce((a,b)=>a+(b.totalDeposit||0),0)*0.15 +
+l2.reduce((a,b)=>a+(b.totalDeposit||0),0)*0.05 +
+l3.reduce((a,b)=>a+(b.totalDeposit||0),0)*0.02;
+
+refEarnings.innerText = "₱"+total.toFixed(2);
+}
+
+// ================= AUTO COMMISSION =================
+function applyCommission(l1,l2,l3,user){
+
+l1.forEach(u=>{
+if(!u.paid1){
+let amount=(u.totalDeposit||0)*0.15;
+db.ref("users/"+user.uid+"/balance").transaction(v=>(v||0)+amount);
+db.ref("users/"+u.uid).update({paid1:true});
+}
+});
+
+l2.forEach(u=>{
+if(!u.paid2){
+let amount=(u.totalDeposit||0)*0.05;
+db.ref("users/"+user.uid+"/balance").transaction(v=>(v||0)+amount);
+db.ref("users/"+u.uid).update({paid2:true});
+}
+});
+
+l3.forEach(u=>{
+if(!u.paid3){
+let amount=(u.totalDeposit||0)*0.02;
+db.ref("users/"+user.uid+"/balance").transaction(v=>(v||0)+amount);
+db.ref("users/"+u.uid).update({paid3:true});
+}
+});
+
+}
+
+// ================= COPY =================
+function copyLink(){
+navigator.clipboard.writeText(inviteLink.value);
+alert("Copied!");
+}
+function copyCode(){
+navigator.clipboard.writeText(inviteCode.value);
+alert("Copied!");
+}
+
+function openLink(){
+window.open(document.getElementById("inviteLink").value,"_blank");
+}
+
+// ================= INIT =================
+window.onload = ()=>{
+generateInvite();
+loadTeam();
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - ClickCoin</title>
+
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: url('BackgroundCC.jpg') no-repeat center center/cover;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .register-wrapper {
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.75);
+      border-radius: 15px;
+    }
+
+    .logo {
+      display: block;
+      margin: 0 auto 15px;
+      width: 70%;
+      max-width: 240px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+      100% { transform: translateY(0px); }
+    }
+
+    .title {
+      font-size: 26px;
+      font-weight: bold;
+      color: gold;
+      margin-bottom: 15px;
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      background: #1e293b;
+      border-radius: 12px;
+      margin: 10px 0;
+      padding: 0 12px;
+    }
+
+    .input-group span {
+      font-size: 14px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      background: transparent;
+      color: white;
+      outline: none;
+      font-size: 14px;
+    }
+
+    .register-btn {
+      width: 100%;
+      padding: 13px;
+      margin-top: 12px;
+      border-radius: 10px;
+      border: none;
+      background: gold;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .register-btn:hover {
+      opacity: 0.85;
+    }
+
+    .bottom-text {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    .login-link {
+      margin-top: 5px;
+      font-weight: bold;
+      color: gold;
+      cursor: pointer;
+    }
+
+    #errorMsg {
+      color: #ff4d4d;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .ref-note {
+      color: gold;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="register-wrapper">
+  <img src="LOGOClickCoin.png" class="logo">
+  <div class="title">REGISTER</div>
+
+  <div class="input-group">
+    <span>📱</span>
+    <input type="text" id="mobile" placeholder="+63 / 09XXXXXXXXX">
+  </div>
+
+  <div class="input-group">
+    <span>🔒</span>
+    <input type="password" id="password" placeholder="Password">
+    <span onclick="togglePass('password', this)">👁</span>
+  </div>
+
+  <div class="input-group">
+    <span>🔒</span>
+    <input type="password" id="confirmPassword" placeholder="Confirm Password">
+    <span onclick="togglePass('confirmPassword', this)">👁</span>
+  </div>
+
+  <div class="input-group" id="inviteGroup">
+    <span>🎟️</span>
+    <input type="text" id="invite" placeholder="Invite Code (Required)" readonly>
+  </div>
+
+  <button class="register-btn" onclick="register()">REGISTER</button>
+
+  <div id="errorMsg"></div>
+
+  <div class="bottom-text">Already have an account?</div>
+  <div class="login-link" onclick="location.href='index.html'">
+    LOG IN NOW
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+  storageBucket: "clickcoin-81040.firebasestorage.app",
+  messagingSenderId: "227649837889",
+  appId: "1:227649837889:web:81ac51f2e358ed2231dfc0"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+// ================= FUNCTIONS =================
+
+function generateInviteCode(){
+  return "CC" + Math.random().toString(36).substring(2,8).toUpperCase();
+}
+
+function getRefCode(){
+  const url = new URL(window.location.href);
+  return url.searchParams.get("ref");
+}
+
+function normalizeMobile(input) {
+  let mobile = input.replace(/\s+/g, "");
+
+  if (mobile.startsWith("+63")) {
+    mobile = mobile.replace("+63", "63");
+  } else if (mobile.startsWith("09")) {
+    mobile = mobile.replace(/^0/, "63");
+  }
+
+  if (!/^639\d{9}$/.test(mobile)) return null;
+  return mobile;
+}
+
+function toEmail(mobile) {
+  return mobile + "@clickcoin.com";
+}
+
+async function mobileExists(mobile) {
+  const snapshot = await get(ref(db, "users"));
+  if (!snapshot.exists()) return false;
+
+  const users = snapshot.val();
+  return Object.values(users).some(u => u.mobile === mobile);
+}
+
+// ================= AUTO REF =================
+const autoRef = getRefCode();
+if (autoRef) {
+  document.getElementById("invite").value = autoRef;
+
+  const note = document.createElement("div");
+  note.className = "ref-note";
+  note.innerText = "Referred by a user ✔";
+  document.getElementById("inviteGroup").appendChild(note);
+}
+
+// ================= REGISTER =================
+window.register = async function () {
+
+  const mobileInput = document.getElementById("mobile").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const confirm = document.getElementById("confirmPassword").value.trim();
+  const error = document.getElementById("errorMsg");
+
+  error.innerText = "";
+
+  if (!mobileInput || !password || !confirm) {
+    error.innerText = "All fields are required.";
+    return;
+  }
+
+  const mobile = normalizeMobile(mobileInput);
+  if (!mobile) {
+    error.innerText = "Invalid mobile format.";
+    return;
+  }
+
+  if (password.length < 6) {
+    error.innerText = "Password must be at least 6 characters.";
+    return;
+  }
+
+  if (password !== confirm) {
+    error.innerText = "Passwords do not match.";
+    return;
+  }
+
+  if (await mobileExists(mobile)) {
+    error.innerText = "Mobile already registered.";
+    return;
+  }
+
+  try {
+    const email = toEmail(mobile);
+    const userCred = await createUserWithEmailAndPassword(auth, email, password);
+    const uid = userCred.user.uid;
+
+    const inviteCode = generateInviteCode();
+    const refCode = getRefCode();
+
+    // SAVE USER
+    await set(ref(db, "users/" + uid), {
+      username: "User" + mobile.slice(-4),
+      mobile: mobile,
+      wallet: 0,
+      myInviteCode: inviteCode,
+      referredBy: refCode || null,
+      createdAt: Date.now(),
+      totalDeposit: 0,
+      commissionEarned: 0
+    });
+
+    // SAVE INVITE OWNER
+    await set(ref(db, "invites/" + inviteCode), {
+      uid: uid
+    });
+
+    await signOut(auth);
+
+    alert("Registered successfully!");
+    window.location.href = "index.html";
+
+  } catch (err) {
+    error.innerText = err.message;
+  }
+};
+
+// ================= TOGGLE =================
+window.togglePass = function(id, el) {
+  const input = document.getElementById(id);
+  input.type = input.type === "password" ? "text" : "password";
+  el.innerText = input.type === "text" ? "🙈" : "👁";
+};
+
+</script>
+
+</body>
+</html>

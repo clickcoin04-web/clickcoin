@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:url("BackgroundCC.jpg") no-repeat center/cover;
+  color:#fff;
+}
+
+.main-wrapper{
+  max-width:420px;
+  margin:auto;
+  padding:20px;
+  padding-bottom:120px;
+}
+
+.logo{
+  width:120px;
+  display:block;
+  margin:10px auto;
+  animation:float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0);}
+50%{transform:translateY(-8px);}
+100%{transform:translateY(0);}
+}
+
+.glow{
+  text-align:center;
+  color:gold;
+  margin:15px 0;
+}
+
+#wallet{
+  text-align:center;
+  font-size:20px;
+  margin-bottom:20px;
+  transition:0.2s;
+}
+
+.task-list{
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+}
+
+.card{
+  display:flex;
+  background:rgba(0,0,0,0.6);
+  border-radius:15px;
+  padding:12px;
+  gap:10px;
+  box-shadow:0 0 10px rgba(255,215,0,0.1);
+}
+
+.card img{
+  width:80px;
+  height:80px;
+  border-radius:10px;
+  object-fit:cover;
+}
+
+.card-info{
+  flex:1;
+}
+
+.buy-btn{
+  margin-top:8px;
+  width:100%;
+  padding:10px;
+  border:none;
+  border-radius:10px;
+  background:linear-gradient(90deg,#ffd700,#ffae00);
+  color:#000;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="main-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+
+<h3 class="glow">HOME</h3>
+
+<div id="wallet">BALANCE ₱0</div>
+
+<div id="taskList" class="task-list"></div>
+
+</div>
+
+<!-- MENU (galing style.css) -->
+<div class="bottom-menu">
+  <div class="menu-item active" onclick="location.href='home.html'">HOME</div>
+  <div class="menu-item" onclick="location.href='task.html'">TASK</div>
+  <div class="menu-item" onclick="location.href='team.html'">TEAM</div>
+  <div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
+</div>
+
+<script type="module">
+// ==========================
+// 🔥 FIREBASE INIT
+// ==========================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  authDomain: "clickcoin-81040.firebaseapp.com",
+  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+  storageBucket: "clickcoin-81040.firebasestorage.app",
+  messagingSenderId: "227649837889",
+  appId: "1:227649837889:web:81ac51f2e358ed2231dfc0"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+window.db = db;
+
+// ==========================
+// 🔥 FORMAT
+// ==========================
+function formatPHP(amount) {
+  return "₱" + Number(amount).toLocaleString('en-PH');
+}
+
+// ==========================
+// 🔥 UPDATE BALANCE UI
+// ==========================
+function updateBalance(balance) {
+  const el = document.getElementById("wallet");
+  if (!el) return;
+
+  el.innerText = "BALANCE " + formatPHP(balance || 0);
+
+  el.style.transform = "scale(1.1)";
+  setTimeout(() => {
+    el.style.transform = "scale(1)";
+  }, 200);
+}
+
+// ==========================
+// 🔥 TASK LIST DATA (UPDATED)
+// ==========================
+const tasks = [
+  { id: 1, name: "Task 1", price: 300, cycle: 100, dailyIncome: 30, totalRevenue: 3000, rechargeLeft: "1/5", img: "task1.png" },
+  { id: 2, name: "Task 2", price: 500, cycle: 100, dailyIncome: 50, totalRevenue: 5000, rechargeLeft: "1/5", img: "task2.png" },
+  { id: 3, name: "Task 3", price: 1000, cycle: 100, dailyIncome: 100, totalRevenue: 10000, rechargeLeft: "1/5", img: "task3.png" },
+  { id: 4, name: "Task 4", price: 2000, cycle: 100, dailyIncome: 200, totalRevenue: 20000, rechargeLeft: "1/5", img: "task4.png" },
+  { id: 5, name: "Task 5", price: 4000, cycle: 100, dailyIncome: 400, totalRevenue: 40000, rechargeLeft: "1/5", img: "task5.png" },
+  { id: 6, name: "Task 6", price: 5000, cycle: 100, dailyIncome: 500, totalRevenue: 50000, rechargeLeft: "1/5", img: "task6.png" },
+  { id: 7, name: "Task 7", price: 8000, cycle: 100, dailyIncome: 800, totalRevenue: 80000, rechargeLeft: "1/5", img: "task7.png" },
+  { id: 8, name: "Task 8", price: 10000, cycle: 100, dailyIncome: 1000, totalRevenue: 100000, rechargeLeft: "1/5", img: "task8.png" },
+  { id: 9, name: "Task 9", price: 15000, cycle: 100, dailyIncome: 1500, totalRevenue: 150000, rechargeLeft: "1/5", img: "task9.png" },
+  { id: 10, name: "Task 10", price: 20000, cycle: 100, dailyIncome: 2000, totalRevenue: 200000, rechargeLeft: "1/5", img: "task10.png" },
+  { id: 11, name: "Task 11", price: 25000, cycle: 100, dailyIncome: 2500, totalRevenue: 250000, rechargeLeft: "1/5", img: "task11.png" },
+  { id: 12, name: "Task 12", price: 30000, cycle: 100, dailyIncome: 3000, totalRevenue: 300000, rechargeLeft: "1/5", img: "task12.png" },
+  { id: 13, name: "Task 13", price: 40000, cycle: 100, dailyIncome: 4000, totalRevenue: 400000, rechargeLeft: "1/5", img: "task13.png" },
+  { id: 14, name: "Task 14", price: 45000, cycle: 100, dailyIncome: 4500, totalRevenue: 450000, rechargeLeft: "1/5", img: "task14.png" },
+  { id: 15, name: "Task 15", price: 50000, cycle: 100, dailyIncome: 5000, totalRevenue: 500000, rechargeLeft: "1/5", img: "task15.png" }
+];
+
+// ==========================
+// 🔥 LOAD TASKS UI
+// ==========================
+function loadTasks() {
+  const container = document.getElementById("taskList");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  tasks.forEach(task => {
+    container.innerHTML += `
+      <div class="card">
+        <img src="${task.img}" onerror="this.src='LOGOClickCoin.png'">
+        <div class="card-info">
+          <h3>${task.name}</h3>
+          <p>Price: ${formatPHP(task.price)}</p>
+          <p>Daily: ${formatPHP(task.dailyIncome)}</p>
+          <p>Cycle: ${task.cycle} days</p>
+          <p>Recharge: ${task.rechargeLeft}</p>
+          <button class="buy-btn" onclick='buyTask(${JSON.stringify(task)})'>
+            BUY
+          </button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+// ==========================
+// 🔥 BUY TASK SYSTEM (UNCHANGED)
+// ==========================
+window.buyTask = async function (task) {
+  let user = JSON.parse(localStorage.getItem("currentUser"));
+
+  if (!user) return;
+
+  if (user.wallet < task.price) {
+    alert("Insufficient balance");
+    window.location.href = "deposit.html";
+    return;
+  }
+
+  const newBalance = user.wallet - task.price;
+
+  await update(ref(db, 'users/' + user.uid), {
+    balance: newBalance
+  });
+
+  let myTasks = JSON.parse(localStorage.getItem("myTasks")) || [];
+
+  myTasks.push({
+    name: task.name,
+    price: task.price,
+    dailyIncome: task.dailyIncome,
+    totalRevenue: task.totalRevenue,
+    startTime: Date.now(),
+    duration: 100 * 24 * 60 * 60 * 1000,
+    earned: 0
+  });
+
+  localStorage.setItem("myTasks", JSON.stringify(myTasks));
+
+  window.location.href = "task.html";
+};
+
+// ==========================
+// 🔥 AUTH + REALTIME BALANCE
+// ==========================
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  const userRef = ref(db, 'users/' + user.uid);
+
+  onValue(userRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.val();
+
+      const updatedUser = {
+        ...data,
+        uid: user.uid,
+        wallet: data.balance || 0
+      };
+
+      localStorage.setItem("currentUser", JSON.stringify(updatedUser));
+
+      updateBalance(updatedUser.wallet);
+    }
+  });
+
+  loadTasks();
+});
+</script>
+
+</body>
+</html>

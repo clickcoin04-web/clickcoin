@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - ClickCoin</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+}
+
+body{
+display:flex;
+justify-content:center;
+align-items:center;
+min-height:100vh;
+background:url('BackgroundCC.jpg') no-repeat center center/cover;
+font-family:Arial;
+color:#fff;
+}
+
+/* LOGIN BOX */
+.login-wrapper{
+width:100%;
+max-width:420px;
+padding:20px;
+text-align:center;
+background:rgba(0,0,0,0.75);
+border-radius:15px;
+box-shadow:0 0 25px rgba(0,0,0,0.6);
+}
+
+/* LOGO */
+.logo{
+width:180px;
+margin-bottom:15px;
+animation:float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0);}
+50%{transform:translateY(-8px);}
+100%{transform:translateY(0);}
+}
+
+/* TITLE */
+.title{
+font-size:26px;
+font-weight:bold;
+color:gold;
+margin-bottom:10px;
+}
+
+/* INPUT */
+.input-group{
+display:flex;
+align-items:center;
+background:#1e293b;
+border-radius:12px;
+margin:10px 0;
+padding:0 12px;
+}
+
+.input-group input{
+flex:1;
+padding:14px;
+border:none;
+background:transparent;
+color:white;
+outline:none;
+}
+
+/* BUTTON */
+.login-btn{
+width:100%;
+padding:12px;
+margin-top:12px;
+border-radius:10px;
+border:none;
+background:linear-gradient(135deg,#1A2A6C,#3E8E41);
+color:white;
+font-weight:bold;
+cursor:pointer;
+transition:0.3s;
+}
+
+.login-btn:hover{
+background:linear-gradient(135deg,#3E8E41,#1A2A6C);
+}
+
+/* ERROR */
+#errorMsg{
+color:#ff4d4d;
+font-size:13px;
+margin-top:10px;
+}
+
+/* REGISTER */
+.register-link{
+margin-top:12px;
+font-weight:bold;
+color:#32CD32;
+cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="login-wrapper">
+
+<img src="LOGOClickCoin.png" class="logo">
+
+<div class="title">LOGIN</div>
+
+<div class="input-group">
+<span>📱</span>
+<input type="text" id="mobile" placeholder="+63 / 09XXXXXXXXX or ADMIN">
+</div>
+
+<div class="input-group">
+<span>🔒</span>
+<input type="password" id="password" placeholder="Password">
+</div>
+
+<button id="loginBtn" class="login-btn" onclick="login()">LOGIN</button>
+
+<div id="errorMsg"></div>
+
+<div class="register-link" onclick="location.href='register.html'">
+REGISTER NOW
+</div>
+
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// CONFIG
+const firebaseConfig = {
+apiKey:"AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+authDomain:"clickcoin-81040.firebaseapp.com",
+databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId:"clickcoin-81040",
+storageBucket:"clickcoin-81040.appspot.com",
+messagingSenderId:"227649837889",
+appId:"1:227649837889:web:81ac51f2e358ed2231dfc0"
+};
+
+// INIT
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+// STATE
+let isLoggingIn = false;
+
+// LOGIN FUNCTION
+window.login = async function(){
+
+if(isLoggingIn) return;
+isLoggingIn = true;
+
+const btn = document.getElementById("loginBtn");
+const mobileInput = document.getElementById("mobile").value.trim();
+const password = document.getElementById("password").value.trim();
+const error = document.getElementById("errorMsg");
+
+error.innerText = "";
+btn.innerText = "Logging...";
+btn.disabled = true;
+
+// VALIDATION
+if(!mobileInput || !password){
+error.innerText = "All fields required";
+return resetBtn();
+}
+
+// ADMIN LOGIN
+if(mobileInput.toUpperCase()==="ADMIN" && password==="Matt@0404"){
+const adminData = {
+uid:"admin-0001",
+username:"ADMIN",
+mobile:"ADMIN",
+role:"admin",
+wallet:0
+};
+
+localStorage.setItem("currentUser", JSON.stringify(adminData));
+window.location.replace("admin.html");
+return;
+}
+
+// NORMALIZE MOBILE
+const mobile = normalizeMobile(mobileInput);
+
+if(!mobile){
+error.innerText = "Invalid mobile format";
+return resetBtn();
+}
+
+const email = mobile + "@clickcoin.com";
+
+try{
+
+const userCred = await signInWithEmailAndPassword(auth, email, password);
+const user = userCred.user;
+
+// CHECK DATABASE
+const snap = await get(ref(db, "users/" + user.uid));
+
+if(!snap.exists()){
+error.innerText = "Account not registered";
+return resetBtn();
+}
+
+const data = snap.val();
+
+// SAVE SESSION
+localStorage.setItem("currentUser", JSON.stringify({
+uid:user.uid,
+username:data.username || "user",
+mobile:data.mobile || mobile,
+wallet:data.wallet || 0,
+role:data.role || "user",
+myInviteCode:data.myInviteCode || ""
+}));
+
+// REDIRECT
+window.location.replace("home.html");
+
+}catch(err){
+console.error(err);
+error.innerText = "Invalid login";
+resetBtn();
+}
+
+};
+
+// RESET BUTTON
+function resetBtn(){
+isLoggingIn = false;
+const btn = document.getElementById("loginBtn");
+btn.innerText = "LOGIN";
+btn.disabled = false;
+}
+
+// NORMALIZE MOBILE
+function normalizeMobile(input){
+let m = input.replace(/\s+/g,"");
+
+if(m.startsWith("+63")) m = m.replace("+63","63");
+else if(m.startsWith("09")) m = m.replace(/^0/,"63");
+
+return /^639\d{9}$/.test(m) ? m : null;
+}
+
+// SAFE AUTO LOGIN (FIXED)
+setTimeout(()=>{
+const savedUser = JSON.parse(localStorage.getItem("currentUser"));
+
+if(savedUser && savedUser.uid){
+if(savedUser.role==="admin"){
+window.location.replace("admin.html");
+}else{
+window.location.replace("home.html");
+}
+}
+}, 500);
+
+</script>
+
+</body>
+</html>

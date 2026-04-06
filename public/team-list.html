@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Team List - ClickCoin</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body{
+margin:0;
+font-family:Arial, sans-serif;
+background:url('BackgroundCC.jpg') no-repeat center/cover;
+color:#fff;
+}
+
+/* wrapper */
+.container{
+max-width:420px;
+margin:auto;
+padding:20px;
+padding-bottom:120px;
+animation:fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn{
+from{opacity:0;transform:translateY(10px);}
+to{opacity:1;transform:translateY(0);}
+}
+
+.logo{
+width:120px;
+display:block;
+margin:10px auto;
+animation:float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0);}
+50%{transform:translateY(-8px);}
+100%{transform:translateY(0);}
+}
+
+.glow{
+text-align:center;
+color:gold;
+margin:20px 0 10px;
+}
+
+/* CARD STYLE (same as account) */
+.card{
+background:rgba(0,0,0,0.6);
+border-radius:15px;
+padding:15px;
+margin-bottom:12px;
+box-shadow:0 0 12px rgba(255,215,0,0.15);
+backdrop-filter:blur(6px);
+}
+
+/* USER ITEM */
+.user-box{
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.user-info h4{
+margin:0;
+font-size:14px;
+}
+
+.user-info p{
+margin:2px 0;
+font-size:11px;
+opacity:0.7;
+}
+
+.amount{
+color:#ffd700;
+font-weight:bold;
+font-size:14px;
+}
+
+.empty{
+text-align:center;
+margin-top:30px;
+color:#aaa;
+}
+
+/* BACK BUTTON (match style) */
+.back-btn{
+display:block;
+margin:10px auto;
+padding:8px 14px;
+background:rgba(0,0,0,0.6);
+border:1px solid rgba(255,215,0,0.3);
+border-radius:10px;
+color:#ffd700;
+cursor:pointer;
+}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+
+<body>
+
+<div class="container">
+
+<img src="LOGOClickCoin.png" class="logo">
+
+<button onclick="goBack()" class="back-btn">⬅ Back</button>
+
+<h3 class="glow" id="title">Team Level</h3>
+
+<div id="list"></div>
+
+</div>
+
+<!-- MENU -->
+<div class="bottom-menu">
+<div class="menu-item" onclick="location.href='home.html'">HOME</div>
+<div class="menu-item" onclick="location.href='task.html'">TASK</div>
+<div class="menu-item active">TEAM</div>
+<div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
+</div>
+
+<script>
+// ================= FIREBASE =================
+firebase.initializeApp({
+apiKey:"AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+});
+const db = firebase.database();
+
+// ================= SAFE =================
+function safeParse(data){
+try{return JSON.parse(data)}catch{return null}
+}
+
+function getUser(){
+return safeParse(localStorage.getItem("currentUser"));
+}
+
+// ================= FORMAT =================
+function formatPHP(amount){
+return "₱" + Number(amount).toLocaleString('en-PH',{
+minimumFractionDigits:2,
+maximumFractionDigits:2
+});
+}
+
+// ================= NAV =================
+function goBack(){
+window.location.href="team.html";
+}
+
+// ================= CHECK =================
+function checkUser(){
+if(!getUser()) location.href="index.html";
+}
+
+// ================= BUILD TREE =================
+function buildLevels(users, currentUser){
+
+let lvl1=[], lvl2=[], lvl3=[];
+
+// LEVEL 1
+Object.values(users).forEach(u=>{
+if(u.referredBy === currentUser.myInviteCode){
+lvl1.push(u);
+}
+});
+
+// LEVEL 2
+lvl1.forEach(u1=>{
+Object.values(users).forEach(u=>{
+if(u.referredBy === u1.myInviteCode){
+lvl2.push(u);
+}
+});
+});
+
+// LEVEL 3
+lvl2.forEach(u2=>{
+Object.values(users).forEach(u=>{
+if(u.referredBy === u2.myInviteCode){
+lvl3.push(u);
+}
+});
+});
+
+return {lvl1, lvl2, lvl3};
+}
+
+// ================= RENDER =================
+function renderList(data){
+
+const container = document.getElementById("list");
+
+if(data.length === 0){
+container.innerHTML = "<p class='empty'>No members found.</p>";
+return;
+}
+
+let html="";
+
+data.forEach(user=>{
+html += `
+<div class="card">
+<div class="user-box">
+
+<div class="user-info">
+<h4>${user.email || user.mobile || "User"}</h4>
+<p>Invite: ${user.myInviteCode || "N/A"}</p>
+<p>Joined: ${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}</p>
+</div>
+
+<div class="amount">
+${formatPHP(user.totalDeposit || 0)}
+</div>
+
+</div>
+</div>
+`;
+});
+
+container.innerHTML = html;
+}
+
+// ================= LOAD =================
+function loadList(){
+
+const user = getUser();
+if(!user) return;
+
+const level = localStorage.getItem("teamLevel");
+
+const title = document.getElementById("title");
+
+if(!level){
+title.innerText = "No Level Selected";
+return;
+}
+
+title.innerText = "LEVEL " + level + " MEMBERS";
+
+db.ref("users").once("value").then(snap=>{
+
+const users = snap.val();
+if(!users) return;
+
+// BUILD LEVEL SYSTEM
+const {lvl1, lvl2, lvl3} = buildLevels(users, user);
+
+// SELECT LEVEL
+let data = [];
+
+if(level == 1) data = lvl1;
+if(level == 2) data = lvl2;
+if(level == 3) data = lvl3;
+
+// RENDER
+renderList(data);
+
+});
+}
+
+// ================= INIT =================
+document.addEventListener("DOMContentLoaded", ()=>{
+checkUser();
+loadList();
+});
+</script>
+
+</body>
+</html>

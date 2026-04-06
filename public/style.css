@@ -1,0 +1,346 @@
+/* =========================
+   🔥 GLOBAL RESET
+========================= */
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:Arial, sans-serif;
+}
+
+/* =========================
+   🔥 BODY
+========================= */
+body{
+  background:url("./BackgroundCC.jpg") no-repeat center center fixed;
+  background-size:cover;
+  color:#fff;
+  min-height:100vh;
+}
+
+/* 🔥 DARK OVERLAY */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.65);
+  z-index:0;
+  pointer-events:none;
+}
+
+/* =========================
+   🔥 MAIN WRAPPER
+========================= */
+.main-wrapper{
+  position:relative;
+  z-index:1;
+
+  max-width:420px;
+  margin:auto;
+  padding:15px;
+
+  padding-bottom:110px;
+}
+
+/* =========================
+   🔥 LOGO
+========================= */
+.logo{
+  width:140px;
+  display:block;
+  margin:15px auto;
+
+  animation:floatLogo 3s ease-in-out infinite;
+  filter:drop-shadow(0 0 10px rgba(255,215,0,0.6));
+}
+
+@keyframes floatLogo{
+  0%{transform:translateY(0)}
+  50%{transform:translateY(-8px)}
+  100%{transform:translateY(0)}
+}
+
+/* =========================
+   🔥 TEXT
+========================= */
+.glow{
+  text-align:center;
+  color:gold;
+  font-size:16px;
+  margin-bottom:10px;
+}
+
+/* =========================
+   🔥 TASK LIST
+========================= */
+.task-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+/* =========================
+   🔥 CARD
+========================= */
+.card{
+  display:flex;
+  gap:12px;
+  background:rgba(30,41,59,0.95);
+  padding:12px;
+  border-radius:14px;
+  align-items:center;
+
+  backdrop-filter:blur(8px);
+  transition:0.25s;
+
+  animation:slideUp 0.4s ease;
+}
+
+.card:active{
+  transform:scale(0.98);
+}
+
+.card img{
+  width:95px;
+  height:95px;
+  object-fit:cover;
+  border-radius:10px;
+}
+
+.card-info{
+  flex:1;
+}
+
+.card-info h3{
+  font-size:15px;
+  color:gold;
+  margin-bottom:3px;
+}
+
+.card-info p{
+  font-size:13px;
+  color:#ccc;
+  margin:2px 0;
+}
+
+/* =========================
+   🔥 BUTTON
+========================= */
+.buy-btn{
+  margin-top:6px;
+  padding:8px 12px;
+  font-size:13px;
+
+  border:none;
+  border-radius:8px;
+
+  background:linear-gradient(135deg,#2563eb,#7c3aed);
+  color:#fff;
+
+  box-shadow:0 0 10px rgba(124,58,237,0.6);
+  cursor:pointer;
+}
+
+/* =========================
+   🔥 PROGRESS
+========================= */
+.progress-bar{
+  background:#333;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:5px;
+  height:7px;
+}
+
+.progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,gold,orange);
+  transition:width 0.8s linear;
+}
+
+/* =========================
+   🔥 BACK BUTTON
+========================= */
+.back-btn{
+  position:fixed;
+  top:15px;
+  left:15px;
+  z-index:9999;
+
+  padding:10px 14px;
+  font-size:16px;
+  font-weight:bold;
+
+  background:gold;
+  color:black;
+  border:none;
+  border-radius:10px;
+
+  box-shadow:0 0 10px rgba(255,215,0,0.5);
+  cursor:pointer;
+}
+
+/* =========================
+   🚀 GLOBAL BOTTOM MENU
+========================= */
+.bottom-menu{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+
+  margin:auto;
+  width:100%;
+  max-width:420px;
+
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+
+  padding:12px 10px;
+
+  background:rgba(17,24,39,0.95);
+  backdrop-filter:blur(12px);
+
+  border-radius:20px 20px 0 0;
+
+  box-shadow:
+    0 -5px 20px rgba(0,0,0,0.6),
+    inset 0 0 10px rgba(255,255,255,0.05);
+
+  z-index:99999;
+}
+
+/* MENU ITEMS */
+.menu-item{
+  flex:1;
+  text-align:center;
+
+  font-size:11px;
+  color:#aaa;
+
+  padding:6px 0;
+  border-radius:12px;
+
+  position:relative;
+  transition:0.25s;
+}
+
+.menu-item::before{
+  content:"";
+  display:block;
+  margin:auto;
+  margin-bottom:3px;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:transparent;
+  transition:0.3s;
+}
+
+.menu-item.active{
+  color:gold;
+  font-weight:bold;
+
+  background:linear-gradient(
+    135deg,
+    rgba(255,215,0,0.15),
+    rgba(255,165,0,0.05)
+  );
+}
+
+.menu-item.active::before{
+  background:gold;
+  box-shadow:0 0 10px gold, 0 0 20px orange;
+}
+
+.menu-item:active{
+  transform:scale(0.92);
+}
+
+/* =========================
+   🔥 ANIMATIONS
+========================= */
+@keyframes slideUp{
+  from{
+    opacity:0;
+    transform:translateY(20px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+/* =========================
+   🔥 ACCOUNT UI
+========================= */
+.account-card{
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+
+.user-phone{
+  color:#ff4d4d;
+  font-size:16px;
+}
+
+.balance-label{
+  font-size:12px;
+  color:#aaa;
+}
+
+.balance-amount{
+  margin-top:3px;
+}
+
+.logout-btn{
+  width:100%;
+  max-width:420px;
+  margin:15px auto;
+  padding:18px;
+
+  background:rgba(255,0,0,0.15);
+  border:1px solid rgba(255,0,0,0.4);
+
+  border-radius:15px;
+  color:#ff4d4d;
+  font-weight:bold;
+  font-size:16px;
+  text-align:center;
+
+  box-shadow:0 0 10px rgba(255,0,0,0.2);
+}
+
+/* =========================
+   🔥 INPUT
+========================= */
+.input-field{
+  width:100%;
+  padding:8px;
+  margin-top:5px;
+  border-radius:6px;
+  border:none;
+  outline:none;
+}
+
+/* =========================
+   🔥 WALLET CARD
+========================= */
+.wallet-card{
+  background:linear-gradient(135deg,#0a0f2c,#1a237e);
+  border-radius:18px;
+  padding:20px;
+  color:white;
+  box-shadow:0 0 25px rgba(0,102,255,0.5);
+  margin-bottom:15px;
+}
+
+.wallet-balance{
+  font-size:28px;
+  font-weight:bold;
+  margin:15px 0;
+  color:#00e5ff;
+  text-shadow:0 0 15px #00e5ff;
+}
