@@ -10,13 +10,12 @@ exports.handler = async (event) => {
     const text = body.message?.text;
 
     if (!chatId) {
+      console.log("❌ Walang chatId");
       return {
         statusCode: 200,
         body: "No chat ID"
       };
     }
-
-    const ADMIN_ID = 2080584414;
 
     let reply = "❓ Unknown command";
 
@@ -24,26 +23,50 @@ exports.handler = async (event) => {
       reply = "👋 Welcome to ClickCoin!";
     } else if (text === "hello") {
       reply = "👋 Hello!";
-    } else if (text === "admin") {
-      reply = chatId == ADMIN_ID
-        ? "🔐 Admin panel"
-        : "❌ You are not admin";
     }
 
-    // ✅ NO node-fetch
-    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: reply
-      })
+    console.log("👉 Sending reply to:", chatId);
+    console.log("👉 Message:", reply);
+
+    const https = require("https");
+
+    const data = JSON.stringify({
+      chat_id: chatId,
+      text: reply
     });
 
-    const data = await res.json();
-    console.log("📤 Telegram response:", data);
+    const options = {
+      hostname: "api.telegram.org",
+      path: `/bot${TOKEN}/sendMessage`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": data.length
+      }
+    };
+
+    await new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let body = "";
+
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+
+        res.on("end", () => {
+          console.log("📤 Telegram response:", body);
+          resolve();
+        });
+      });
+
+      req.on("error", (e) => {
+        console.error("❌ REQUEST ERROR:", e);
+        reject(e);
+      });
+
+      req.write(data);
+      req.end();
+    });
 
     return {
       statusCode: 200,
