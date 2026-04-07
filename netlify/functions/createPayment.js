@@ -2,7 +2,7 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 
-// 🔥 SAFE FIREBASE INIT
+// 🔥 INIT FIREBASE (SAFE)
 let db = null;
 
 try {
@@ -14,27 +14,27 @@ try {
   }
   db = admin.database();
 } catch (e) {
-  console.error("FIREBASE INIT FAILED:", e.message);
+  console.error("🔥 FIREBASE INIT ERROR:", e.message);
 }
 
 // 🔥 TIMEOUT FETCH
-async function fetchWithTimeout(url, options, timeout = 8000) {
+async function fetchWithTimeout(url, options, timeout = 10000) {
   return Promise.race([
     fetch(url, options),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout")), timeout)
+      setTimeout(() => reject(new Error("Request timeout")), timeout)
     )
   ]);
 }
 
 exports.handler = async (event) => {
 
+  // 🔥 KEEP FUNCTION WARM
   if (event.httpMethod === "GET") {
-    return { statusCode: 200, body: "warm" };
+    return { statusCode: 200, body: "alive" };
   }
 
   try {
-
     const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
 
     if (!PAYMONGO_SECRET) {
@@ -49,16 +49,47 @@ exports.handler = async (event) => {
     const amount = Number(body.amount);
     const userId = body.uid;
 
-    if (!amount || amount < 50 || !userId) {
+    // 🔒 VALIDATION
+    if (!amount || amount < 50) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Invalid data" })
+        body: JSON.stringify({ error: "Minimum deposit is 50" })
       };
     }
 
-    const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
+    if (!userId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing userId" })
+      };
+    }
 
-    // 🔥 CALL PAYMONGO FIRST (ALWAYS)
+    // 🔥 UNIQUE REFERENCE (IMPORTANT)
+    const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(5).toString("hex");
+
+    // =========================================
+    // 🔥 STEP 1: SAVE FIRST (CRITICAL FIX)
+    // =========================================
+    if (!db) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Database not ready" })
+      };
+    }
+
+    await db.ref("transactions/" + reference).set({
+      userId: userId,
+      amount: amount,
+      reference: reference,
+      status: "PENDING",
+      createdAt: Date.now()
+    });
+
+    console.log("✅ SAVED TRANSACTION:", reference);
+
+    // =========================================
+    // 🔥 STEP 2: CREATE PAYMONGO LINK
+    // =========================================
     const res = await fetchWithTimeout("https://api.paymongo.com/v1/links", {
       method: "POST",
       headers: {
@@ -68,9 +99,9 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: Math.round(amount * 100),
-            description: "Deposit",
-            remarks: reference
+            amount: Math.round(amount * 100), // centavos
+            description: `ClickCoin Deposit (${userId})`,
+            remarks: reference // 🔥 CRITICAL (MATCH WEBHOOK)
           }
         }
       })
@@ -78,13 +109,17 @@ exports.handler = async (event) => {
 
     const data = await res.json();
 
-    console.log("PAYMONGO:", JSON.stringify(data));
+    console.log("💳 PAYMONGO RESPONSE:", JSON.stringify(data));
 
-    if (!data || !data.data || !data.data.attributes || !data.data.attributes.checkout_url) {
+    // 🔒 FAIL SAFE (DELETE IF FAIL)
+    if (!data || !data.data || !data.data.attributes) {
+
+      await db.ref("transactions/" + reference).remove();
+
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: "PayMongo failed",
+          error: "PayMongo error",
           details: data
         })
       };
@@ -92,32 +127,34 @@ exports.handler = async (event) => {
 
     const checkout_url = data.data.attributes.checkout_url;
 
-    // 🔥 SAVE OPTIONAL (HINDI SISIRA KAHIT MAG-FAIL)
-    if (db) {
-      try {
-        await db.ref("transactions/" + reference).set({
-          userId,
-          amount,
-          reference,
-          status: "PENDING",
-          createdAt: Date.now()
-        });
-      } catch (e) {
-        console.error("FIREBASE SAVE FAILED:", e.message);
-      }
+    if (!checkout_url) {
+
+      await db.ref("transactions/" + reference).remove();
+
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "No checkout URL",
+          details: data
+        })
+      };
     }
 
-    // 🔥 ALWAYS RETURN URL
+    // =========================================
+    // 🔥 STEP 3: RETURN URL (NO RETRY ISSUE)
+    // =========================================
     return {
       statusCode: 200,
       body: JSON.stringify({
+        success: true,
+        reference,
         checkout_url
       })
     };
 
   } catch (err) {
 
-    console.error("MAIN ERROR:", err);
+    console.error("❌ CREATE PAYMENT ERROR:", err);
 
     return {
       statusCode: 500,
