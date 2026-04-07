@@ -109,6 +109,11 @@ h2 { color: gold; text-shadow: 0 0 8px gold; }
   border: none;
   border-radius: 10px;
 }
+.loader {
+  display:none;
+  margin-top:10px;
+  color:#00ffcc;
+}
 </style>
 </head>
 
@@ -143,6 +148,8 @@ h2 { color: gold; text-shadow: 0 0 8px gold; }
 
   <button class="btn" onclick="payNow()">PROCEED TO GCASH</button>
 
+  <div class="loader" id="loader">Redirecting to GCash...</div>
+
   <div class="note">
     • Pay via GCash (PayMongo)<br>
     • Auto credit after payment<br>
@@ -160,7 +167,7 @@ h2 { color: gold; text-shadow: 0 0 8px gold; }
 
 <script>
 const firebaseConfig = {
-  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
+  apiKey: "AIzaSyCMLY...",
   authDomain: "clickcoin-81040.firebaseapp.com",
   databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "clickcoin-81040"
@@ -188,7 +195,6 @@ function initPage(){
     let d = snap.val();
     if(!d) return;
     currentUser.wallet = d.wallet || 0;
-    localStorage.setItem("currentUser", JSON.stringify(currentUser));
     wallet.innerText = formatPHP(currentUser.wallet);
   });
 
@@ -211,17 +217,17 @@ function setAmount(val){
   amount.value = val;
 }
 
-/* RETRY */
-async function fetchWithRetry(url, options, retries=3){
-  try{
-    const res = await fetch(url, options);
-    if(!res.ok) throw new Error();
-    return res;
-  }catch(e){
-    if(retries === 0) throw e;
-    await new Promise(r => setTimeout(r, 3000));
-    return fetchWithRetry(url, options, retries-1);
+/* BULLETPROOF FETCH */
+async function fetchSafe(url, options){
+  for(let i=0;i<3;i++){
+    try{
+      const res = await fetch(url, options);
+      const data = await res.json();
+      if(data && data.checkout_url) return data;
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,2000));
   }
+  return null;
 }
 
 async function payNow(){
@@ -230,43 +236,40 @@ async function payNow(){
   isPaying = true;
 
   let amt = Number(amount.value);
-
   if(!amt || amt < 50){
-    alert("Minimum ₱50");
     isPaying=false;
     return;
   }
 
-  alert("Connecting to payment server...");
+  loader.style.display = "block";
 
   try{
 
-    const res = await fetch("/.netlify/functions/createPayment", {
-  method:"POST",
-  headers:{ "Content-Type":"application/json" },
-  body: JSON.stringify({
-    amount: amt,
-    uid: currentUser.uid
-  })
-});
+    const data = await fetchSafe("/.netlify/functions/createPayment", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        amount: amt,
+        uid: currentUser.uid
+      })
+    });
 
-    const data = await res.json();
-
-   if(!data || !data.checkout_url){
-  console.error(data);
-  alert("Payment failed: " + (data.error || "Unknown error"));
-  return;
-}
+    if(!data){
+      loader.innerText = "Retrying connection...";
+      isPaying=false;
+      return;
+    }
 
     localStorage.setItem("pendingDeposit", JSON.stringify({
       amount: amt,
       time: Date.now()
     }));
 
+    // 🔥 DIRECT REDIRECT (NO ALERT)
     window.location.href = data.checkout_url;
 
   }catch(e){
-    alert("Server busy, please try again.");
+    loader.innerText = "Connection failed. Try again.";
   }
 
   isPaying=false;
@@ -296,8 +299,6 @@ async function checkReturnPayment(){
   });
 
   localStorage.removeItem("pendingDeposit");
-
-  alert("Payment received! Waiting for confirmation.");
 }
 
 function goBack(){

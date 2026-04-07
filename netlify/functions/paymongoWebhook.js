@@ -1,88 +1,92 @@
-const crypto = require("crypto");
 const fetch = require("node-fetch");
-const { completeTransaction } = require("./_transactions");
+const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
+    databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+  });
+}
+
+const db = admin.database();
 
 exports.handler = async (event) => {
+
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 200, body: "ok" };
+  }
+
   try {
+
     const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
-    const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
+    const body = JSON.parse(event.body);
 
-    const rawBody = event.body;
+    const data = body.data;
 
-    // 🔒 SIGNATURE VERIFICATION (CRITICAL)
-    const signature = event.headers["paymongo-signature"];
-
-    if (!signature || !WEBHOOK_SECRET) {
-      return { statusCode: 400, body: "Missing signature" };
+    if (!data || data.attributes.type !== "payment.paid") {
+      return { statusCode: 200 };
     }
 
-    const computedSignature = crypto
-      .createHmac("sha256", WEBHOOK_SECRET)
-      .update(rawBody)
-      .digest("hex");
+    const paymentId = data.id;
 
-    if (!signature.includes(computedSignature)) {
-      console.error("❌ Invalid webhook signature");
-      return { statusCode: 403, body: "Invalid signature" };
-    }
-
-    const body = JSON.parse(rawBody);
-
-    const type = body?.data?.attributes?.type;
-
-    if (type !== "link.payment.paid") {
-      return { statusCode: 200, body: "Ignored" };
-    }
-
-    const attributes = body.data.attributes.data.attributes;
-
-    const reference = attributes.remarks;
-    const paymentId = body.data.id;
-
-    if (!reference || !paymentId) {
-      return {
-        statusCode: 400,
-        body: "Missing reference or paymentId"
-      };
-    }
-
-    console.log("💰 Webhook received:", { reference, paymentId });
-
-    // 🔒 DOUBLE VERIFY WITH PAYMONGO
-    const res = await fetch(`https://api.paymongo.com/v1/links/${attributes.id}`, {
+    // 🔥 VERIFY FROM PAYMONGO (ANTI-FAKE)
+    const verifyRes = await fetch(`https://api.paymongo.com/v1/payments/${paymentId}`, {
       headers: {
         Authorization:
-          "Basic " + Buffer.from(PAYMONGO_SECRET + ":").toString("base64")
+          "Basic " + Buffer.from(PAYMONGO_SECRET + ":").toString("base64"),
       }
     });
 
-    const verifyData = await res.json();
+    const verifyData = await verifyRes.json();
 
-    if (!verifyData.data) {
-      console.error("❌ PayMongo verify failed");
-      return { statusCode: 400, body: "Verification failed" };
+    if (!verifyData.data || verifyData.data.attributes.status !== "paid") {
+      console.log("❌ Fake payment blocked");
+      return { statusCode: 200 };
     }
 
-    const paid = verifyData.data.attributes.status === "paid";
+    const attributes = verifyData.data.attributes;
 
-    if (!paid) {
-      return { statusCode: 200, body: "Not paid" };
+    const reference = attributes.remarks;
+    const amount = attributes.amount / 100;
+
+    // 🔥 FETCH ORIGINAL TRANSACTION
+    const snap = await db.ref("transactions/" + reference).once("value");
+
+    if (!snap.exists()) return { statusCode: 200 };
+
+    const trx = snap.val();
+
+    // 🔥 MATCH CHECK (ANTI-TAMPER)
+    if (trx.amount !== amount) {
+      console.log("❌ Amount mismatch blocked");
+      return { statusCode: 200 };
     }
 
-    // 🔥 SAFE CREDIT (your logic, now protected)
-    await completeTransaction(reference);
+    if (trx.status === "COMPLETED") {
+      return { statusCode: 200 };
+    }
 
-    return {
-      statusCode: 200,
-      body: "OK"
-    };
+    // 🔥 MARK COMPLETE
+    await db.ref("transactions/" + reference).update({
+      status: "COMPLETED",
+      paidAt: Date.now(),
+      paymentId
+    });
+
+    // 🔥 WALLET CREDIT
+    await db.ref("users/" + trx.userId).transaction(user => {
+      if (user) {
+        user.wallet = (user.wallet || 0) + amount;
+      }
+      return user;
+    });
+
+    console.log("✅ SECURE CREDIT:", trx.userId, amount);
+
+    return { statusCode: 200, body: "verified" };
 
   } catch (err) {
-    console.error("❌ webhook error:", err);
-
-    return {
-      statusCode: 500,
-      body: err.message || "Webhook error"
-    };
+    console.error("❌ Webhook error:", err);
+    return { statusCode: 500 };
   }
 };
