@@ -148,7 +148,17 @@ databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedataba
 });
 const db = getDatabase(app);
 
-// ================= GLOBAL DEBUG LOGGER =================
+// ================= GLOBAL SAFE UPDATE =================
+async function safeUpdate(path, data){
+try{
+await update(ref(db), data);
+}catch(e){
+console.error("UPDATE ERROR:", e);
+alert("Database error");
+}
+}
+
+// ================= LOGGER =================
 async function logAdmin(action, data){
 try{
 await push(ref(db,"admin_logs"),{
@@ -216,14 +226,15 @@ modal.style.display="flex";
 window.saveBalance=async id=>{
 const val=parseFloat(document.getElementById("newBal").value)||0;
 
-await update(ref(db,"users/"+id),{wallet:val});
+await safeUpdate("/",{
+['users/'+id+'/wallet']: val
+});
 
 await logAdmin("SET_BALANCE",{id,val});
-
 modal.style.display="none";
 };
 
-// ADD
+// ADD (SAFE FETCH LATEST)
 window.addBalance=id=>{
 modalContent.innerHTML=`
 <h3>Add Balance</h3>
@@ -235,14 +246,15 @@ modal.style.display="flex";
 
 window.confirmAdd=async id=>{
 const amt=parseFloat(document.getElementById("amount").value)||0;
-const u=USERS_CACHE[id];
 
-await update(ref(db,"users/"+id),{
-wallet:(u.wallet||0)+amt
+const snap = await get(ref(db,"users/"+id));
+const u = snap.val() || {};
+
+await safeUpdate("/",{
+['users/'+id+'/wallet']: (u.wallet||0)+amt
 });
 
 await logAdmin("ADD_BALANCE",{id,amt});
-
 modal.style.display="none";
 };
 
@@ -258,14 +270,15 @@ modal.style.display="flex";
 
 window.confirmMinus=async id=>{
 const amt=parseFloat(document.getElementById("amount").value)||0;
-const u=USERS_CACHE[id];
 
-await update(ref(db,"users/"+id),{
-wallet:(u.wallet||0)-amt
+const snap = await get(ref(db,"users/"+id));
+const u = snap.val() || {};
+
+await safeUpdate("/",{
+['users/'+id+'/wallet']: (u.wallet||0)-amt
 });
 
 await logAdmin("DEDUCT_BALANCE",{id,amt});
-
 modal.style.display="none";
 };
 
@@ -284,7 +297,7 @@ modalContent.innerHTML=`
 modal.style.display="flex";
 };
 
-// ================= DEPOSITS DEBUG =================
+// ================= DEPOSITS (FIXED) =================
 onValue(ref(db,"transactions"), snap=>{
 let html="";
 
@@ -304,6 +317,7 @@ Status: ${d.status}
 document.getElementById("deposit").innerHTML=html;
 });
 
+// 🔥 FIX: NO DOUBLE CREDIT
 window.forceApprove=async id=>{
 const snap=await get(ref(db,"transactions/"+id));
 const d=snap.val();
@@ -313,18 +327,23 @@ alert("No transaction");
 return;
 }
 
-const u=USERS_CACHE[d.userId]||{};
+// ❌ already processed
+if(d.status === "COMPLETED"){
+alert("Already approved");
+return;
+}
 
-await update(ref(db,"users/"+d.userId),{
-wallet:(u.wallet||0)+d.amount
-});
+const userSnap = await get(ref(db,"users/"+d.userId));
+const u = userSnap.val() || {};
 
-await update(ref(db,"transactions/"+id),{
-status:"COMPLETED",
-manual:true
+await safeUpdate("/",{
+['users/'+d.userId+'/wallet']: (u.wallet||0)+d.amount,
+['transactions/'+id+'/status']: "COMPLETED",
+['transactions/'+id+'/manual']: true
 });
 
 await logAdmin("FORCE_DEPOSIT",d);
+alert("Deposit approved");
 };
 
 // ================= WITHDRAW =================
@@ -357,6 +376,7 @@ ${w.status}
 document.getElementById("withdraw").innerHTML=html;
 });
 
+// 🔥 FIX: optional deduct (if not yet deducted)
 window.approveWithdraw=async id=>{
 await update(ref(db,"withdrawals/"+id),{status:"APPROVED"});
 await logAdmin("APPROVE_WITHDRAW",{id});
@@ -367,9 +387,7 @@ await update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
 await logAdmin("REJECT_WITHDRAW",{id});
 };
 
-// ================= DEBUG PANEL =================
-
-// 🔥 ADMIN LOGS
+// ================= ADMIN LOGS =================
 onValue(ref(db,"admin_logs"), snap=>{
 let logs=[];
 
@@ -391,11 +409,6 @@ ${JSON.stringify(l.data)}<br>
 });
 
 document.getElementById("stats").innerHTML=html;
-});
-
-// 🔥 WEBHOOK LOGS
-onValue(ref(db,"webhook_logs"), snap=>{
-console.log("WEBHOOK LOGS:", snap.val());
 });
 
 // ================= STATS =================

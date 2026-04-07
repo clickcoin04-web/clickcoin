@@ -10,63 +10,146 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
-exports.handler = async () => {
+// 🔥 LOGGER (REALTIME DEBUG)
+async function log(step, data) {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const id = Date.now() + "_" + Math.random().toString(16).slice(2);
 
-    console.log("🚀 DAILY INCOME RUN:", today);
+    await db.ref("daily_logs/" + id).set({
+      step,
+      data,
+      time: new Date().toISOString()
+    });
+
+  } catch (e) {
+    console.error("LOG ERROR:", e.message);
+  }
+}
+
+// ========================================
+// 🚀 MAIN FUNCTION
+// ========================================
+exports.handler = async () => {
+
+  const startTime = Date.now();
+
+  try {
+
+    await log("START_DAILY_RUN", "Triggered");
 
     const snap = await db.ref("users").once("value");
 
     if (!snap.exists()) {
-      return { statusCode: 200, body: "No users" };
+      await log("NO_USERS_FOUND", null);
+      return {
+        statusCode: 200,
+        body: "NO USERS"
+      };
     }
 
-    const users = snap.val();
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
 
-    for (const uid in users) {
-      const user = users[uid];
+    let processedUsers = 0;
+    let skippedUsers = 0;
+    let successUsers = 0;
 
-      // ❌ skip kung walang investment
-      if (!user.investment || user.investment <= 0) continue;
+    let updates = [];
 
-      // ❌ skip kung nakapag-claim na today
-      if (user.lastIncomeDate === today) continue;
+    snap.forEach(userSnap => {
 
-      const income = user.investment * 0.10;
+      const uid = userSnap.key;
+      const user = userSnap.val();
 
-      // 💰 ADD WALLET
-      await db.ref("users/" + uid).transaction(u => {
-        if (!u) return u;
+      processedUsers++;
 
-        u.wallet = (u.wallet || 0) + income;
-        u.lastIncomeDate = today;
+      // ❌ NO INVESTMENT
+      if (!user.investment) {
+        skippedUsers++;
+        return;
+      }
 
-        return u;
-      });
+      const inv = user.investment;
 
-      // 📜 LOG
-      await db.ref("income_logs").push({
-        uid,
-        income,
-        date: today,
-        timestamp: Date.now()
-      });
+      // ❌ LIMIT 30 DAYS
+      if (inv.days >= 30) {
+        skippedUsers++;
+        return;
+      }
 
-      console.log(`✅ ${uid} +${income}`);
-    }
+      const last = inv.lastClaim || inv.start || now;
+
+      // ❌ NOT YET 24 HOURS
+      if (now - last < ONE_DAY) {
+        skippedUsers++;
+        return;
+      }
+
+      const income = inv.capital * 0.10;
+
+      // 🔥 APPLY TRANSACTION
+      updates.push(
+        db.ref("users/" + uid).transaction(u => {
+          if (!u) return u;
+
+          if (!u.investment) return u;
+
+          u.wallet = (u.wallet || 0) + income;
+
+          u.investment.lastClaim = now;
+          u.investment.days = (u.investment.days || 0) + 1;
+
+          return u;
+        }).then(() => {
+          successUsers++;
+
+          return log("USER_INCOME_ADDED", {
+            uid,
+            income,
+            capital: inv.capital
+          });
+        })
+      );
+
+    });
+
+    await Promise.all(updates);
+
+    const duration = Date.now() - startTime;
+
+    await log("DAILY_RUN_COMPLETE", {
+      processedUsers,
+      successUsers,
+      skippedUsers,
+      duration_ms: duration
+    });
 
     return {
       statusCode: 200,
-      body: "DAILY INCOME SUCCESS"
+      body: JSON.stringify({
+        message: "DAILY INCOME SUCCESS",
+        processedUsers,
+        successUsers,
+        skippedUsers,
+        duration
+      })
     };
 
   } catch (err) {
-    console.error("❌ DAILY ERROR:", err);
+
+    await log("FATAL_ERROR", err.message);
 
     return {
       statusCode: 500,
       body: err.message
     };
   }
+};
+
+// ========================================
+// ⏰ NETLIFY CRON (AUTO RUN DAILY)
+// ========================================
+exports.config = {
+  schedule: "0 16 * * *" 
+  // 🔥 12AM PH TIME (UTC-8 difference)
 };

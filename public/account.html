@@ -199,60 +199,92 @@ databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatab
 projectId: "clickcoin-81040",
 storageBucket: "clickcoin-81040.firebasestorage.app",
 messagingSenderId: "227649837889",
-appId: "1:227649837889:web:81ac51f2e358ed2231dfc0",
-measurementId: "G-BKQQEF1E1H"
+appId: "1:227649837889:web:81ac51f2e358ed2231dfc0"
 };
 
 firebase.initializeApp(firebaseConfig);
+
 const auth = firebase.auth();
 const db = firebase.database();
 
-function safeParse(d){try{return JSON.parse(d);}catch{return null;}}
-function formatPHP(a){return "₱"+Number(a).toLocaleString('en-PH',{minimumFractionDigits:2});}
-
-function loadUser(){
-const user = safeParse(localStorage.getItem("currentUser"));
-if(!user || !user.uid){window.location.href="index.html";return;}
-
-db.ref("users/"+user.uid).on("value", snap=>{
-const data = snap.val();
-if(!data) return;
-user.wallet = data.balance || 0;
-localStorage.setItem("currentUser", JSON.stringify(user));
-document.getElementById("wallet").innerText = formatPHP(user.wallet);
-});
-
-let mobile = user.mobile || "";
-if(!mobile.startsWith("+63")) mobile = "-"+mobile.replace(/^0/,"");
-document.getElementById("mobile").innerText = mobile;
-
-generateInvite();
+function formatPHP(a){
+return "₱"+Number(a || 0).toLocaleString('en-PH',{minimumFractionDigits:2});
 }
 
-function generateInvite(){
-const user = safeParse(localStorage.getItem("currentUser"));
-if(!user || !user.uid) return;
+auth.onAuthStateChanged(user => {
 
-db.ref("users/"+user.uid).once("value").then(snap=>{
+if(!user){
+window.location.href="index.html";
+return;
+}
+
+const uid = user.uid;
+
+// 🔥 REALTIME USER LISTENER (FIXED)
+db.ref("users/"+uid).on("value", snap=>{
+const data = snap.val();
+
+if(!data) return;
+
+// ✅ BALANCE FIX (important)
+const balance = data.wallet || data.balance || 0;
+
+document.getElementById("wallet").innerText = formatPHP(balance);
+
+// ✅ MOBILE
+let mobile = data.mobile || "";
+if(mobile && !mobile.startsWith("+63")){
+mobile = "+63"+mobile.replace(/^0/,"");
+}
+document.getElementById("mobile").innerText = mobile;
+
+// ✅ SAVE CACHE (optional)
+localStorage.setItem("currentUser", JSON.stringify({
+uid: uid,
+mobile: mobile,
+wallet: balance
+}));
+
+});
+
+// 🔥 GENERATE INVITE (NO DUPLICATE)
+generateInvite(uid);
+
+});
+
+// 🔥 INVITE SYSTEM (FIXED)
+function generateInvite(uid){
+
+db.ref("users/"+uid).once("value").then(snap=>{
 const data = snap.val() || {};
+
 let code = data.myInviteCode;
 
 if(!code){
-code = "CC"+user.uid.substring(0,6).toUpperCase();
-db.ref("users/"+user.uid).update({myInviteCode: code});
-db.ref("invites/"+code).set({uid: user.uid});
-}
+code = "CC"+uid.substring(0,6).toUpperCase();
 
-user.myInviteCode = code;
-localStorage.setItem("currentUser", JSON.stringify(user));
+db.ref("users/"+uid).update({
+myInviteCode: code
+});
 
-const link = window.location.origin + "/register.html?ref=" + code;
-document.getElementById("inviteCode").value = code;
-document.getElementById("inviteLink").value = link;
+db.ref("invites/"+code).set({
+uid: uid,
+createdAt: Date.now()
 });
 }
 
-function goPage(p){window.location.href=p;}
+// ✅ SET UI
+const link = window.location.origin + "/register.html?ref=" + code;
+
+document.getElementById("inviteCode").value = code;
+document.getElementById("inviteLink").value = link;
+
+});
+}
+
+function goPage(p){
+window.location.href = p;
+}
 
 function logout(){
 auth.signOut().then(()=>{
@@ -262,20 +294,22 @@ window.location.href="index.html";
 }
 
 function copyLink(){
-const el=document.getElementById("inviteLink");
-el.select();document.execCommand("copy");alert("Copied!");
+const el = document.getElementById("inviteLink");
+el.select();
+document.execCommand("copy");
+alert("Copied!");
 }
 
 function copyCode(){
-const el=document.getElementById("inviteCode");
-el.select();document.execCommand("copy");alert("Copied!");
+const el = document.getElementById("inviteCode");
+el.select();
+document.execCommand("copy");
+alert("Copied!");
 }
 
 function openLink(){
 window.open(document.getElementById("inviteLink").value,"_blank");
 }
-
-loadUser();
 </script>
 
 <script src="support.js"></script>

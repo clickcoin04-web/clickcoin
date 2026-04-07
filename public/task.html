@@ -150,7 +150,7 @@ body::before{
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getDatabase, ref, get, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
@@ -166,186 +166,132 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-window.db = db;
-window.set = set;
+function formatPHP(val){
+  return "₱" + Number(val || 0).toLocaleString("en-PH");
+}
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
   if (!user) {
     location.href = "index.html";
     return;
   }
 
-  const snap = await get(ref(db, 'users/' + user.uid));
-  if (snap.exists()) {
-    localStorage.setItem("currentUser", JSON.stringify({ ...snap.val(), uid:user.uid }));
-  }
+  const uid = user.uid;
 
-  startApp();
-});
-</script>
-
-<script>
-function getUser(){
-  return JSON.parse(localStorage.getItem("currentUser"));
-}
-
-function formatPHP(val){
-  return "₱" + Number(val || 0).toLocaleString("en-PH");
-}
-
-function updateBalanceUI(){
-  const user = getUser();
-  document.getElementById("wallet").innerText =
-    "BALANCE " + formatPHP(user?.wallet || 0);
-}
-</script>
-
-<!-- 🔥 START -->
-<script>
-function startApp(){
-  updateBalanceUI();
-  syncBalance();
-  loadTasks();
-  startAutoIncome();
-}
-</script>
-
-<!-- 🔥 TASK DISPLAY -->
-<script>
-function loadTasks(){
-  const container = document.getElementById("taskList");
-  container.innerHTML = "";
-
-  const tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
-
-  if(tasks.length === 0){
-    container.innerHTML = `
-      <p style="color:#aaa">
-        No active tasks<br><br>
-        👉 Go to HOME and BUY a task to start earning
-      </p>
-    `;
-    return;
-  }
-
-  tasks.forEach(task=>{
-    const now = Date.now();
-    const oneDay = 86400000;
-
-    const totalDays = (now - task.startTime) / oneDay;
-
-    const earned = task.capital * task.dailyRate * totalDays;
-
-    const max = task.capital * task.dailyRate * task.durationDays;
-
-    const percent = Math.min((totalDays / task.durationDays) * 100, 100);
-
-    container.innerHTML += `
-      <div class="card">
-        <img src="LOGOClickCoin.png">
-        <div class="card-info">
-          <h3>${task.name}</h3>
-          <p>Daily: ${formatPHP(task.capital * task.dailyRate)}</p>
-          <p>Earned: ${formatPHP(earned)}</p>
-          <p>Total: ${formatPHP(max)}</p>
-          <p>Progress: ${Math.floor(percent)}%</p>
-
-          <div class="progress-bar">
-            <div class="progress-fill" style="width:${percent}%"></div>
-          </div>
-        </div>
-      </div>
-    `;
+  // 🔥 REALTIME USER BALANCE
+  onValue(ref(db, 'users/' + uid), (snap)=>{
+    const data = snap.val() || {};
+    document.getElementById("wallet").innerText =
+      "BALANCE " + formatPHP(data.wallet || data.balance || 0);
   });
-}
-</script>
 
-<!-- 🔥 REAL AUTO INCOME -->
-<script>
-function startAutoIncome(){
-  setInterval(()=>{
+  // 🔥 REALTIME TASKS (FIXED)
+  onValue(ref(db, 'investments/' + uid), (snap)=>{
+    const container = document.getElementById("taskList");
+    container.innerHTML = "";
 
-    let user = getUser();
-    if(!user || !user.uid) return;
+    const tasks = snap.val();
 
-    let tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
-    let totalNew = 0;
-    const now = Date.now();
+    if (!tasks) {
+      container.innerHTML = `
+        <p style="color:#aaa">
+          No active tasks<br><br>
+          👉 Go to HOME and BUY a task to start earning
+        </p>
+      `;
+      return;
+    }
 
-    tasks.forEach(task=>{
+    Object.keys(tasks).forEach(key => {
+      const task = tasks[key];
 
-      if(!task.lastClaim){
-        task.lastClaim = task.startTime;
-      }
-
-      const elapsed = now - task.lastClaim;
+      const now = Date.now();
       const oneDay = 86400000;
 
-      const days = elapsed / oneDay;
-      if(days <= 0) return;
+      const days = (now - (task.createdAt || now)) / oneDay;
 
-      const daily = task.capital * task.dailyRate;
+      const daily = task.dailyIncome || (task.price * 0.1);
       const earned = daily * days;
 
-      totalNew += earned;
+      const max = daily * (task.durationDays || 30);
+      const percent = Math.min((days / (task.durationDays || 30)) * 100, 100);
 
-      task.lastClaim = now;
+      container.innerHTML += `
+        <div class="card">
+          <img src="LOGOClickCoin.png">
+          <div class="card-info">
+            <h3>${task.name || "Investment"}</h3>
+            <p>Daily: ${formatPHP(daily)}</p>
+            <p>Earned: ${formatPHP(earned)}</p>
+            <p>Total: ${formatPHP(max)}</p>
+            <p>Progress: ${Math.floor(percent)}%</p>
+
+            <div class="progress-bar">
+              <div class="progress-fill" style="width:${percent}%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+  });
+
+  // 🔥 AUTO INCOME (SAFE VERSION)
+  setInterval(async () => {
+
+    const snap = await new Promise(res=>{
+      onValue(ref(db,'investments/'+uid), s=>res(s), {onlyOnce:true});
     });
 
-    localStorage.setItem("myTasks", JSON.stringify(tasks));
+    const tasks = snap.val();
+    if(!tasks) return;
 
-    if(totalNew > 0){
+    let total = 0;
+    const updates = {};
 
-      user.wallet = (user.wallet || 0) + totalNew;
+    Object.keys(tasks).forEach(key=>{
+      const t = tasks[key];
 
-      const userRef = ref(db,'users/'+user.uid);
+      const now = Date.now();
+      const last = t.lastClaim || t.createdAt;
+      const diff = now - last;
 
-      window.set(userRef,{
-        ...user,
-        wallet: Math.floor(user.wallet)
+      const oneDay = 86400000;
+      if(diff < oneDay) return;
+
+      const days = Math.floor(diff / oneDay);
+
+      const daily = t.dailyIncome || (t.price * 0.1);
+      const earn = daily * days;
+
+      total += earn;
+
+      updates['investments/'+uid+'/'+key+'/lastClaim'] = now;
+      updates['investments/'+uid+'/'+key+'/totalEarned'] =
+        (t.totalEarned || 0) + earn;
+    });
+
+    if(total > 0){
+      const userSnap = await new Promise(res=>{
+        onValue(ref(db,'users/'+uid), s=>res(s), {onlyOnce:true});
       });
 
-      localStorage.setItem("currentUser", JSON.stringify(user));
+      const userData = userSnap.val() || {};
+
+      const newBalance = (userData.wallet || 0) + total;
+
+      updates['users/'+uid+'/wallet'] = Math.floor(newBalance);
+
+      await update(ref(db), updates);
     }
 
-    updateBalanceUI();
-    loadTasks();
+  }, 10000); // every 10 sec check
 
-  },3000);
-}
-</script>
+});
 
-<!-- 🔥 SYNC -->
-<script>
-function syncBalance(){
-  const user = getUser();
-  if(!user?.uid) return;
-
-  const userRef = ref(db,'users/'+user.uid);
-
-  onValue(userRef,(snap)=>{
-    const data = snap.val();
-    if(data){
-      localStorage.setItem("currentUser", JSON.stringify(data));
-      updateBalanceUI();
-    }
-  });
-}
-</script>
-
-<script>
-function goBack(){
+window.goBack = function(){
   location.href="home.html";
-}
+};
 </script>
-
-<!-- MENU -->
-<div class="bottom-menu">
-  <div class="menu-item" onclick="location.href='home.html'">HOME</div>
-  <div class="menu-item active">TASK</div>
-  <div class="menu-item" onclick="location.href='team.html'">TEAM</div>
-  <div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
-</div>
 
 <script src="support.js"></script>
 
