@@ -1,3 +1,7 @@
+const fetch = require("node-fetch");
+const crypto = require("crypto");
+const { createTransaction } = require("./_transactions");
+
 exports.handler = async (event) => {
   const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
 
@@ -19,17 +23,39 @@ exports.handler = async (event) => {
     };
   }
 
-  const amount = body.amount;
-  const uid = body.uid;
+  const amount = Number(body.amount);
+  const userId = body.userId;
 
-  if (!amount || !uid) {
+  // 🔥 VALIDATION (ADDED)
+  if (!amount || isNaN(amount) || amount <= 0 || !userId) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Missing amount or uid" }),
+      body: JSON.stringify({ error: "Invalid amount or userId" }),
     };
   }
 
   try {
+    // 🔥 STRONGER REFERENCE (ANTI-GUESS)
+    const reference =
+      "cc_" +
+      Date.now() +
+      "_" +
+      crypto.randomBytes(4).toString("hex");
+
+    console.log("💰 Creating payment:", { userId, amount, reference });
+
+    // 🔥 SAVE TRANSACTION FIRST (same logic mo)
+    await createTransaction({
+      userId,
+      type: "deposit",
+      amount,
+      reference
+    });
+
+    // 🔥 TIMEOUT PROTECTION
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch("https://api.paymongo.com/v1/links", {
       method: "POST",
       headers: {
@@ -40,22 +66,32 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: amount * 100,
+            amount: Math.round(amount * 100), // 🔥 ensure integer
             description: "Deposit",
+            remarks: reference,
             metadata: {
-              uid: uid,
-            },
+              userId
+            }
           },
         },
       }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeout);
 
     const data = await response.json();
 
-    if (!data.data) {
+    // 🔥 FAIL SAFE (ADDED)
+    if (!data.data || !data.data.attributes) {
+      console.error("❌ PayMongo error:", data);
+
       return {
         statusCode: 500,
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          error: "Payment provider error",
+          details: data
+        }),
       };
     }
 
@@ -63,12 +99,18 @@ exports.handler = async (event) => {
       statusCode: 200,
       body: JSON.stringify({
         checkout_url: data.data.attributes.checkout_url,
+        reference
       }),
     };
+
   } catch (err) {
+    console.error("❌ createPayment error:", err);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({
+        error: err.message || "Internal error"
+      }),
     };
   }
 };

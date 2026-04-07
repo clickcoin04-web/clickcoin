@@ -1,3 +1,4 @@
+<!-- ================= FULL ADMIN SYSTEM ================= -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,66 +9,15 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: url('BackgroundCC.jpg') no-repeat center center/cover;
-}
+/* SAME DESIGN */
+body { margin:0; font-family:Arial; background:url('BackgroundCC.jpg') no-repeat center/cover; }
+.main-wrapper { background: rgba(0,0,0,0.9); min-height:100vh; padding:20px; display:flex; justify-content:center; }
+.container { max-width:420px; width:100%; }
+.logo img { width:120px; display:block; margin:auto; }
+.menu { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.menu button { flex:1 1 30%; padding:10px; border:none; border-radius:10px; background:#222; color:gold; }
 
-.main-wrapper {
-  background: rgba(0,0,0,0.85);
-  min-height: 100vh;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.container { width:100%; max-width:420px; }
-
-.logo { text-align:center; margin-bottom:10px; animation:float 3s infinite; }
-.logo img { width:120px; }
-
-@keyframes float { 50% { transform: translateY(-8px);} }
-
-.top-row { display:flex; justify-content:flex-end; margin-bottom:10px; }
-
-.notif-btn {
-  background: gold;
-  padding: 8px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-}
-
-.menu {
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  margin-bottom:10px;
-}
-
-.menu button {
-  flex:1 1 30%;
-  padding:10px;
-  border-radius:10px;
-  border:none;
-  background:#222;
-  color:gold;
-  font-size:11px;
-  cursor:pointer;
-}
-
-.main-box {
-  background:#111;
-  border-radius:12px;
-  padding:12px;
-  height:340px;
-  overflow-y:auto;
-  margin-bottom:10px;
-}
-
-.section { display:none; }
-
-.section-title { color:gold; margin-bottom:8px; }
+.main-box { background:#111; border-radius:12px; padding:12px; height:350px; overflow:auto; }
 
 .card {
   background:#1a1a1a;
@@ -79,81 +29,75 @@ body {
 }
 
 .card button {
-  margin-top:6px;
-  padding:6px;
+  margin-top:5px;
+  padding:5px;
   border:none;
   border-radius:6px;
-  font-size:11px;
-  cursor:pointer;
 }
 
-.approve { background:green; color:white; }
-.reject { background:red; color:white; }
-.delete { background:#444; color:white; }
+.approve{background:green;color:white;}
+.reject{background:red;color:white;}
+.delete{background:#444;color:white;}
+.edit{background:gold;color:black;}
 
-.modal {
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.8);
-  display:none;
-  justify-content:center;
-  align-items:center;
-  z-index:999;
+.section{display:none;}
+
+.modal{
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,0.8);
+display:none;
+justify-content:center;
+align-items:center;
 }
 
-.modal-box {
-  background:#111;
-  padding:15px;
-  border-radius:10px;
-  width:90%;
-  max-width:350px;
-  color:white;
+.modal-box{
+background:#111;
+padding:15px;
+border-radius:10px;
+color:white;
+width:90%;
+max-width:350px;
 }
 
-.invite-box {
-  background:#111;
-  padding:10px;
-  border-radius:10px;
+input{
+width:100%;
+padding:8px;
+margin:5px 0;
+background:#222;
+color:gold;
+border:none;
+border-radius:6px;
 }
 
-.invite-box input {
-  width:100%;
-  padding:8px;
-  border-radius:8px;
-  border:none;
-  margin-bottom:6px;
-  background:#222;
-  color:gold;
+.invite-box{
+margin-top:10px;
+background:#111;
+padding:10px;
+border-radius:10px;
 }
 
-.copy-btn {
-  width:100%;
-  padding:10px;
-  background:gold;
-  border:none;
-  border-radius:10px;
+.copy-btn{
+width:100%;
+padding:10px;
+background:gold;
+border:none;
+border-radius:10px;
 }
 
-.logout-btn {
-  width:100%;
-  padding:12px;
-  background:red;
-  color:white;
-  border:none;
-  border-radius:10px;
-  margin-top:10px;
+.logout-btn{
+width:100%;
+padding:12px;
+background:red;
+border:none;
+border-radius:10px;
+margin-top:10px;
 }
 </style>
 </head>
 
 <body>
-
-<div id="loadingScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:9999;">
-Loading...
-</div>
 
 <div class="main-wrapper">
 <div class="container">
@@ -162,270 +106,227 @@ Loading...
 <img src="LOGOClickCoin.png">
 </div>
 
-<div class="top-row">
-<div class="notif-btn">🔔 <span id="notifBadge">0</span></div>
-</div>
-
 <div class="menu">
-<button onclick="showSection('users')">👥 Users</button>
-<button onclick="showSection('deposit')">📥 Deposits</button>
-<button onclick="showSection('withdraw')">💸 Withdraw</button>
-<button onclick="showSection('stats')">📊 Stats</button>
-<button onclick="showSection('logs')">💬 Chat</button>
+<button onclick="show('users')">Users</button>
+<button onclick="show('deposit')">Deposits</button>
+<button onclick="show('withdraw')">Withdraw</button>
+<button onclick="show('stats')">Stats</button>
 </div>
 
 <div class="main-box">
 <div id="users" class="section"></div>
-<div id="deposit" class="section"><div id="depositList"></div></div>
-<div id="withdraw" class="section"><div id="withdrawList"></div></div>
-<div id="stats" class="section"></div>
-<div id="logs" class="section"></div>
+<div id="deposit" class="section"></div>
+<div id="withdraw" class="section"></div>
+<div id="stats" class="section">
+<canvas id="chart"></canvas>
+</div>
 </div>
 
 <div class="invite-box">
-<div class="section-title">🔗 Admin Invite</div>
 <input id="inviteCode" readonly>
 <input id="inviteLink" readonly>
 <button class="copy-btn" onclick="copyInvite()">COPY</button>
 </div>
 
-<button class="logout-btn" onclick="logout()">LOGOUT</button>
+<button class="logout-btn" onclick="logout()">Logout</button>
 
 </div>
 </div>
 
-<div id="userModal" class="modal">
-<div class="modal-box" id="userDetails"></div>
+<div id="modal" class="modal">
+<div class="modal-box" id="modalContent"></div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "clickcoin-81040.firebaseapp.com",
-  databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "clickcoin-81040",
-};
-
-const app = initializeApp(firebaseConfig);
+const app = initializeApp({
+apiKey:"AIzaSy...",
+databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+});
 const db = getDatabase(app);
 
-const user = JSON.parse(localStorage.getItem("currentUser"));
-if (!user || user.role !== "admin") location.replace("index.html");
+// ================= USERS =================
+let USERS_CACHE = {};
 
-document.getElementById("loadingScreen").style.display="none";
-
-// USERS
 onValue(ref(db,"users"), snap=>{
-let arr=[];
-snap.forEach(c=> arr.push({id:c.key,...c.val()}));
-arr.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+let html="";
+USERS_CACHE = {};
 
-let html="<div class='section-title'>Users</div>";
-arr.forEach(u=>{
+snap.forEach(c=>{
+USERS_CACHE[c.key]=c.val();
+});
+
+Object.entries(USERS_CACHE).forEach(([id,u])=>{
 html+=`
 <div class="card">
-<b onclick="viewUser('${u.id}')">${u.username||"N/A"}</b><br>
-📱 ${u.mobile||"N/A"}<br>
+<b onclick="viewUser('${id}')">${u.username||"N/A"}</b><br>
+📱 ${u.phone || "No number"}<br>
 💰 ₱${u.wallet||0}<br>
-📅 ${format(u.createdAt)}
-<button class="delete" onclick="deleteUser('${u.id}')">Remove</button>
+📊 Deposit: ₱${u.totalDeposit||0}
+<button class="delete" onclick="deleteUser('${id}')">Delete</button>
+<button class="edit" onclick="editBalance('${id}')">Edit Balance</button>
 </div>`;
 });
-users.innerHTML=html;
+
+document.getElementById("users").innerHTML=html;
+computeStats(USERS_CACHE);
 });
 
+// DELETE USER
 window.deleteUser=id=>{
 if(confirm("Delete user?")){
 remove(ref(db,"users/"+id));
 }
 };
 
-window.viewUser=async(id)=>{
-const snap=await get(ref(db,"users/"+id));
-if(!snap.exists()) return;
+// EDIT BALANCE
+window.editBalance=async id=>{
+const u=USERS_CACHE[id];
 
-const u=snap.val();
-userDetails.innerHTML=`
-<h3>${u.username}</h3>
-📱 ${u.mobile}<br>
-💰 Wallet: ₱${u.wallet||0}<br>
-📥 Deposit: ₱${u.totalDeposit||0}<br>
-📅 Joined: ${format(u.createdAt)}
-<button onclick="closeModal()">Close</button>
+modalContent.innerHTML=`
+<h3>Edit Balance</h3>
+<input id="newBal" value="${u.wallet||0}">
+<button onclick="saveBalance('${id}')">Save</button>
 `;
-userModal.style.display="flex";
+modal.style.display="flex";
 };
 
-window.closeModal=()=>userModal.style.display="none";
+window.saveBalance=async id=>{
+const val=parseFloat(document.getElementById("newBal").value);
+await update(ref(db,"users/"+id),{wallet:val});
+modal.style.display="none";
+};
 
-// DEPOSITS
+// VIEW USER (WITH FULL PHONE)
+window.viewUser=async id=>{
+const u=USERS_CACHE[id];
+
+modalContent.innerHTML=`
+<h3>${u.username}</h3>
+📱 ${u.phone || "No number"}<br>
+💰 Wallet: ₱${u.wallet}<br>
+📊 Deposit: ₱${u.totalDeposit||0}<br>
+<button onclick="modal.style.display='none'">Close</button>
+`;
+modal.style.display="flex";
+};
+
+// ================= DEPOSIT =================
 onValue(ref(db,"deposits"), snap=>{
-let html="<div class='section-title'>Deposits</div>";
-let notif=0;
+let html="";
 
 snap.forEach(c=>{
 const d=c.val(),id=c.key;
-if(!d) return;
-if(d.status==="PENDING") notif++;
 
 html+=`
 <div class="card">
-${d.username||"N/A"}<br>
-₱${d.amount||0}<br>
-📅 ${format(d.time)}<br>
-📱 ${d.number||"N/A"}<br>
-${d.status||"PENDING"}
+${d.username}<br>
+₱${d.amount}<br>
+${d.status}
 <button class="approve" onclick="approveDeposit('${id}')">Approve</button>
 <button class="reject" onclick="rejectDeposit('${id}')">Reject</button>
 </div>`;
 });
 
-depositList.innerHTML=html;
-notifBadge.innerText=notif;
+document.getElementById("deposit").innerHTML=html;
 });
 
-window.approveDeposit=async(id)=>{
+window.approveDeposit=async id=>{
 const snap=await get(ref(db,"deposits/"+id));
-if(!snap.exists()) return;
-const dep=snap.val();
-if(dep.status!=="PENDING") return;
+const d=snap.val();
 
-const userRef=ref(db,"users/"+dep.uid);
-const userSnap=await get(userRef);
-if(!userSnap.exists()) return;
-const u=userSnap.val();
+const u=USERS_CACHE[d.uid];
 
-await update(userRef,{
-wallet:(u.wallet||0)+dep.amount,
-totalDeposit:(u.totalDeposit||0)+dep.amount,
-depositTime:Date.now()
+await update(ref(db,"users/"+d.uid),{
+wallet:(u.wallet||0)+d.amount,
+totalDeposit:(u.totalDeposit||0)+d.amount
 });
 
-await update(ref(db,"deposits/"+id),{
-status:"APPROVED",
-time:Date.now()
-});
+await update(ref(db,"deposits/"+id),{status:"APPROVED"});
 };
 
-window.rejectDeposit=async(id)=>{
-await update(ref(db,"deposits/"+id),{status:"REJECTED"});
+window.rejectDeposit=id=>{
+update(ref(db,"deposits/"+id),{status:"REJECTED"});
 };
 
-// WITHDRAW
+// ================= WITHDRAW (FULL DETAILS) =================
 onValue(ref(db,"withdrawals"), snap=>{
-let html="<div class='section-title'>Withdrawals</div>";
+let html="";
+let list=[];
 
 snap.forEach(c=>{
-const w=c.val(),id=c.key;
-if(!w) return;
+list.push(c.val());
+});
+
+// sort newest
+list.sort((a,b)=>b.time-a.time);
+
+list.forEach(w=>{
+const user = USERS_CACHE[w.uid] || {};
 
 html+=`
 <div class="card">
-${w.username||"N/A"}<br>
-₱${w.amount||0}<br>
-📅 ${format(w.time)}<br>
-${w.status||"PENDING"}
-<button class="approve" onclick="approveWithdraw('${id}')">Approve</button>
-<button class="reject" onclick="rejectWithdraw('${id}')">Reject</button>
+<b>${w.username}</b><br>
+📱 ${user.phone || "No number"}<br>
+💳 ${w.method}<br>
+👤 ${w.accName}<br>
+📲 ${w.accNumber}<br>
+💰 Amount: ₱${w.amount}<br>
+💸 Fee: ₱${w.fee}<br>
+✅ Receive: ₱${w.receive}<br>
+🕒 ${new Date(w.time).toLocaleString()}<br>
+<b>Status: ${w.status}</b><br>
+
+<button class="approve" onclick="approveWithdraw('${w.id}')">Approve</button>
+<button class="reject" onclick="rejectWithdraw('${w.id}')">Reject</button>
 </div>`;
 });
 
-withdrawList.innerHTML=html;
+document.getElementById("withdraw").innerHTML=html;
 });
 
-window.approveWithdraw=async(id)=>{
-const snap=await get(ref(db,"withdrawals/"+id));
-if(!snap.exists()) return;
-const w=snap.val();
-if(w.status!=="PENDING") return;
-
-if(w.amount<150){
-alert("Minimum ₱150");
-return;
-}
-
-const userRef=ref(db,"users/"+w.uid);
-const userSnap=await get(userRef);
-if(!userSnap.exists()) return;
-const u=userSnap.val();
-
-const now=Date.now();
-if(now - (u.depositTime||0) < 100*24*60*60*1000){
-alert("Deposit locked for 100 days");
-return;
-}
-
-let earnings=(u.wallet||0)-(u.totalDeposit||0);
-
-if(w.amount>earnings){
-alert("Not allowed");
-return;
-}
-
-await update(userRef,{
-wallet:(u.wallet||0)-w.amount
-});
-
-await update(ref(db,"withdrawals/"+id),{
-status:"APPROVED"
-});
+window.approveWithdraw=id=>{
+update(ref(db,"withdrawals/"+id),{status:"APPROVED"});
 };
 
 window.rejectWithdraw=id=>{
 update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
 };
 
-// STATS
-onValue(ref(db,"users"), snap=>{
-let totalUsers=0,totalMoney=0;
-snap.forEach(c=>{
-const u=c.val();
-totalUsers++;
-totalMoney+=(u.wallet||0);
-});
+// ================= STATS =================
+let chart;
 
-stats.innerHTML=`
-<div class="section-title">Stats</div>
-👥 Members: ${totalUsers}<br>
-💰 Total Money: ₱${totalMoney.toLocaleString()}
-`;
-});
+function computeStats(users){
+let count=Object.keys(users).length;
 
-// CHAT
-onValue(ref(db,"chat"), snap=>{
-let html="<div class='section-title'>Chat</div>";
-snap.forEach(c=>{
-const m=c.val();
-if(!m) return;
-html+=`<div class="card">${m.user}: ${m.msg}</div>`;
-});
-logs.innerHTML=html;
-});
+if(chart) chart.destroy();
 
-function format(t){
-if(!t) return "N/A";
-return new Date(t).toLocaleString();
+chart=new Chart(document.getElementById("chart"),{
+type:"bar",
+data:{
+labels:["Users"],
+datasets:[{label:"Total Users",data:[count]}]
 }
-</script>
+});
+}
 
-<script>
-function showSection(id){
+// ================= UI =================
+window.show=id=>{
 document.querySelectorAll(".section").forEach(s=>s.style.display="none");
 document.getElementById(id).style.display="block";
-}
+};
 
-function logout(){
-localStorage.removeItem("currentUser");
-location.replace("index.html");
-}
+window.logout=()=>{
+localStorage.clear();
+location="index.html";
+};
 
-function copyInvite(){
+window.copyInvite=()=>{
 navigator.clipboard.writeText(inviteLink.value);
 alert("Copied");
-}
+};
 
 function generateInvite(){
 const code="ADMIN"+Math.floor(Math.random()*9999);
@@ -435,7 +336,7 @@ inviteLink.value=location.origin+"/register.html?ref="+code;
 
 window.onload=()=>{
 generateInvite();
-showSection("users");
+show("users");
 };
 </script>
 

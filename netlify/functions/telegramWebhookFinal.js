@@ -5,6 +5,8 @@ exports.handler = async (event) => {
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const ADMIN_ID = process.env.ADMIN_CHAT_ID;
 
+  
+
   try {
     const body = JSON.parse(event.body || "{}");
 
@@ -18,12 +20,20 @@ exports.handler = async (event) => {
     const chatId = message.chat.id.toString();
     const rawText = message.text || "";
 
-    // 🔥 CLEAN TEXT
-    const text = rawText
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
+    // 🔥 RATE LIMIT (FIXED POSITION)
+    global.userCooldown = global.userCooldown || {};
+    const now = Date.now();
 
+    if (global.userCooldown[chatId] && now - global.userCooldown[chatId] < 2000) {
+      return {
+        statusCode: 200,
+        body: "Slow down"
+      };
+    }
+
+    global.userCooldown[chatId] = now;
+
+    const text = rawText.toLowerCase().replace(/\s+/g, " ").trim();
     const isAdmin = chatId === ADMIN_ID;
 
     console.log("👉 TEXT:", text);
@@ -32,7 +42,7 @@ exports.handler = async (event) => {
     let reply = "";
 
     // =========================
-    // 🔥 COMMANDS (FULL SYSTEM)
+    // 🔥 COMMANDS
     // =========================
 
     const commands = {
@@ -53,25 +63,61 @@ help`;
 account
 balance
 deposit
+withdraw
 support`;
       },
 
-      "help": async () => {
-        return "📩 Support will reply soon.";
-      },
+      "help": async () => "📩 Support will reply soon.",
 
-      "support": async () => {
-        return "📩 Support will reply soon.";
-      },
+      "support": async () => "📩 Support will reply soon.",
 
       "account": async () => {
         return `🆔 Your account ID:
 ${chatId}`;
       },
 
-      // =========================
-      // 💰 PAYMONGO DEPOSIT
-      // =========================
+      // 💰 USER WITHDRAW INFO
+      "withdraw": async () => {
+        return `💸 Withdraw format:
+
+withdraw 100 09123456789`;
+      },
+
+      // 🔐 ADMIN COMMANDS
+      "approve": async () => {
+        if (!isAdmin) return "❌ Admin only.";
+        return `✅ Approve format:
+
+approve withdrawId`;
+      },
+
+      "reject": async () => {
+        if (!isAdmin) return "❌ Admin only.";
+        return `❌ Reject format:
+
+reject withdrawId`;
+      },
+
+      "stats": async () => {
+        if (!isAdmin) return "❌ Admin only.";
+
+        try {
+          const res = await fetch("https://clickcoin.site/.netlify/functions/adminStats");
+          const data = await res.json();
+
+          return `📊 SYSTEM STATS
+
+👥 Users: ${data.totalUsers}
+💰 Deposits: ${data.totalDeposits}
+📤 Withdraws: ${data.totalWithdraws}
+⏳ Pending: ${data.pendingWithdraws}`;
+
+        } catch {
+          return "❌ Failed to load stats";
+        }
+      },
+
+      // 💳 DEPOSIT
       "deposit": async () => {
         try {
           const res = await fetch("https://clickcoin.site/.netlify/functions/createPayment", {
@@ -95,53 +141,130 @@ ${chatId}`;
 ${data.checkout_url}`;
 
         } catch (err) {
-          console.error("❌ PayMongo error:", err);
+          console.error(err);
           return "❌ Payment failed.";
         }
       },
 
-      // =========================
-      // 💰 BALANCE (READY FOR DB)
-      // =========================
+      // 💰 BALANCE
       "balance": async () => {
-        return "💰 Your balance: 0 (connect DB)";
+        try {
+          const res = await fetch("https://clickcoin.site/.netlify/functions/getBalance", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              userId: chatId
+            })
+          });
+
+          const data = await res.json();
+
+          return `💰 Your balance: ₱${data.balance}`;
+
+        } catch {
+          return "❌ Failed to fetch balance.";
+        }
       },
 
-      // =========================
-      // 🔐 ADMIN PANEL
-      // =========================
       "admin": async () => {
         if (!isAdmin) return "❌ Access denied.";
 
         return `🔐 ADMIN PANEL
 
-users
-balance_admin
-withdraw`;
-      },
-
-      "users": async () => {
-        if (!isAdmin) return "❌ Admin only.";
-        return "👥 Total users: (connect database)";
-      },
-
-      "balance_admin": async () => {
-        if (!isAdmin) return "❌ Admin only.";
-        return "💰 System balance: (connect PayMongo)";
-      },
-
-      "withdraw": async () => {
-        if (!isAdmin) return "❌ Admin only.";
-        return "📤 Pending withdrawals: (connect DB)";
+approve
+reject
+stats`;
       }
 
     };
 
     // =========================
-    // 🚀 EXECUTE COMMAND
+    // 🔥 PRIORITY PARSERS
     // =========================
 
-    if (commands[text]) {
+    if (text.startsWith("withdraw ")) {
+      const parts = text.split(" ");
+
+      if (parts.length !== 3) {
+        reply = "❌ Format: withdraw amount gcash";
+      } else {
+        const amount = parseFloat(parts[1]);
+        const gcash = parts[2];
+
+        if (isNaN(amount) || amount <= 0) {
+          reply = "❌ Invalid amount";
+        } else {
+          try {
+            const res = await fetch("https://clickcoin.site/.netlify/functions/requestWithdraw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: chatId,
+                amount,
+                gcash
+              })
+            });
+
+            const data = await res.json();
+            reply = data.error ? "❌ " + data.error : "✅ Withdraw request submitted";
+
+          } catch {
+            reply = "❌ Withdraw failed";
+          }
+        }
+      }
+
+    } else if (text.startsWith("approve ")) {
+      if (!isAdmin) {
+        reply = "❌ Admin only.";
+      } else {
+        const withdrawId = text.split(" ")[1];
+
+        try {
+          const res = await fetch("https://clickcoin.site/.netlify/functions/adminWithdrawAction", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              withdrawId,
+              action: "approve"
+            })
+          });
+
+          const data = await res.json();
+          reply = data.error ? "❌ " + data.error : "✅ Withdraw approved";
+
+        } catch {
+          reply = "❌ Error approving";
+        }
+      }
+
+    } else if (text.startsWith("reject ")) {
+      if (!isAdmin) {
+        reply = "❌ Admin only.";
+      } else {
+        const withdrawId = text.split(" ")[1];
+
+        try {
+          const res = await fetch("https://clickcoin.site/.netlify/functions/adminWithdrawAction", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              withdrawId,
+              action: "reject"
+            })
+          });
+
+          const data = await res.json();
+          reply = data.error ? "❌ " + data.error : "❌ Withdraw rejected";
+
+        } catch {
+          reply = "❌ Error rejecting";
+        }
+      }
+
+    } else if (commands[text]) {
       reply = await commands[text]();
     } else {
       reply = `❌ Unknown command
@@ -173,14 +296,8 @@ help`;
 
     await new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
-        let data = "";
-
-        res.on("data", chunk => data += chunk);
-
-        res.on("end", () => {
-          console.log("📤 Telegram:", data);
-          resolve();
-        });
+        res.on("data", () => {});
+        res.on("end", resolve);
       });
 
       req.on("error", reject);

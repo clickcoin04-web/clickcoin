@@ -87,7 +87,6 @@ body{
 </style>
 </head>
 
-
 <body>
 
 <div class="main-wrapper">
@@ -102,7 +101,6 @@ body{
 
 </div>
 
-<!-- MENU (galing style.css) -->
 <div class="bottom-menu">
   <div class="menu-item active" onclick="location.href='home.html'">HOME</div>
   <div class="menu-item" onclick="location.href='task.html'">TASK</div>
@@ -111,9 +109,6 @@ body{
 </div>
 
 <script type="module">
-// ==========================
-// 🔥 FIREBASE INIT
-// ==========================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getDatabase, ref, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -134,16 +129,12 @@ const db = getDatabase(app);
 
 window.db = db;
 
-// ==========================
-// 🔥 FORMAT
-// ==========================
+// FORMAT
 function formatPHP(amount) {
   return "₱" + Number(amount).toLocaleString('en-PH');
 }
 
-// ==========================
-// 🔥 UPDATE BALANCE UI
-// ==========================
+// UPDATE BALANCE
 function updateBalance(balance) {
   const el = document.getElementById("wallet");
   if (!el) return;
@@ -156,9 +147,7 @@ function updateBalance(balance) {
   }, 200);
 }
 
-// ==========================
-// 🔥 TASK LIST DATA (UPDATED)
-// ==========================
+// 🔥 ORIGINAL TASK LIST (UNTOUCHED)
 const tasks = [
   { id: 1, name: "Task 1", price: 300, cycle: 100, dailyIncome: 30, totalRevenue: 3000, rechargeLeft: "1/5", img: "task1.png" },
   { id: 2, name: "Task 2", price: 500, cycle: 100, dailyIncome: 50, totalRevenue: 5000, rechargeLeft: "1/5", img: "task2.png" },
@@ -177,9 +166,7 @@ const tasks = [
   { id: 15, name: "Task 15", price: 50000, cycle: 100, dailyIncome: 5000, totalRevenue: 500000, rechargeLeft: "1/5", img: "task15.png" }
 ];
 
-// ==========================
-// 🔥 LOAD TASKS UI
-// ==========================
+// LOAD TASKS (UNCHANGED)
 function loadTasks() {
   const container = document.getElementById("taskList");
   if (!container) return;
@@ -205,46 +192,82 @@ function loadTasks() {
   });
 }
 
-// ==========================
-// 🔥 BUY TASK SYSTEM (UNCHANGED)
-// ==========================
-window.buyTask = async function (task) {
-  let user = JSON.parse(localStorage.getItem("currentUser"));
+// 🔥 EXTRA FUNCTIONS ONLY
 
-  if (!user) return;
+let isBuying = false;
+
+function normalizeTasks(){
+  let list = JSON.parse(localStorage.getItem("myTasks")) || [];
+
+  list = list.map(t=>{
+    if(!t.capital){
+      t.capital = t.price || 0;
+      t.dailyRate = 0.10;
+      t.durationDays = t.cycle || 100;
+      t.lastClaim = Date.now();
+    }
+    return t;
+  });
+
+  localStorage.setItem("myTasks", JSON.stringify(list));
+}
+
+function saveHistory(task){
+  let h = JSON.parse(localStorage.getItem("buyHistory")) || [];
+  h.push({name:task.name, price:task.price, time:Date.now()});
+  localStorage.setItem("buyHistory", JSON.stringify(h));
+}
+
+// BUY TASK (LOGIC LANG DINAGDAG)
+window.buyTask = async function (task) {
+
+  if(isBuying) return;
+  isBuying = true;
+
+  let user = JSON.parse(localStorage.getItem("currentUser"));
+  if (!user){
+    isBuying = false;
+    return;
+  }
 
   if (user.wallet < task.price) {
     alert("Insufficient balance");
     window.location.href = "deposit.html";
+    isBuying = false;
     return;
   }
+
+  normalizeTasks();
 
   const newBalance = user.wallet - task.price;
 
   await update(ref(db, 'users/' + user.uid), {
-    balance: newBalance
+    wallet: newBalance
   });
 
   let myTasks = JSON.parse(localStorage.getItem("myTasks")) || [];
 
   myTasks.push({
     name: task.name,
-    price: task.price,
-    dailyIncome: task.dailyIncome,
-    totalRevenue: task.totalRevenue,
+    capital: task.price,
+    dailyRate: 0.10,
+    durationDays: task.cycle,
     startTime: Date.now(),
-    duration: 100 * 24 * 60 * 60 * 1000,
-    earned: 0
+    lastClaim: Date.now()
   });
 
   localStorage.setItem("myTasks", JSON.stringify(myTasks));
 
+  saveHistory(task);
+
+  user.wallet = newBalance;
+  localStorage.setItem("currentUser", JSON.stringify(user));
+
+  alert("Task purchased successfully!");
   window.location.href = "task.html";
 };
 
-// ==========================
-// 🔥 AUTH + REALTIME BALANCE
-// ==========================
+// AUTH
 onAuthStateChanged(auth, (user) => {
   if (!user) {
     window.location.href = "index.html";
@@ -260,11 +283,10 @@ onAuthStateChanged(auth, (user) => {
       const updatedUser = {
         ...data,
         uid: user.uid,
-        wallet: data.balance || 0
+        wallet: data.wallet || data.balance || 0
       };
 
       localStorage.setItem("currentUser", JSON.stringify(updatedUser));
-
       updateBalance(updatedUser.wallet);
     }
   });
@@ -272,6 +294,7 @@ onAuthStateChanged(auth, (user) => {
   loadTasks();
 });
 </script>
+
 <script src="support.js"></script>
 
 </body>

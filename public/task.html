@@ -8,9 +8,6 @@
 <link rel="stylesheet" href="style.css">
 
 <style>
-
-
-/* 🔥 GLOBAL */
 body{
   margin:0;
   font-family:Arial;
@@ -135,7 +132,6 @@ body::before{
   color:#ffd700;
   font-weight:bold;
 }
-
 </style>
 </head>
 
@@ -204,16 +200,17 @@ function updateBalanceUI(){
 }
 </script>
 
-<!-- 🔥 CORE LOGIC -->
+<!-- 🔥 START -->
 <script>
 function startApp(){
   updateBalanceUI();
   syncBalance();
   loadTasks();
-  startAutoIncome(); // 🔥 IMPORTANT
+  startAutoIncome();
 }
 </script>
 
+<!-- 🔥 TASK DISPLAY -->
 <script>
 function loadTasks(){
   const container = document.getElementById("taskList");
@@ -221,7 +218,6 @@ function loadTasks(){
 
   const tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
 
-  // 🔥 NEW USER (NO BUY)
   if(tasks.length === 0){
     container.innerHTML = `
       <p style="color:#aaa">
@@ -234,19 +230,25 @@ function loadTasks(){
 
   tasks.forEach(task=>{
     const now = Date.now();
-    const progress = Math.min((now - task.startTime)/task.duration,1);
-    const percent = Math.floor(progress * 100);
+    const oneDay = 86400000;
 
-    const earned = task.totalRevenue * progress;
+    const totalDays = (now - task.startTime) / oneDay;
+
+    const earned = task.capital * task.dailyRate * totalDays;
+
+    const max = task.capital * task.dailyRate * task.durationDays;
+
+    const percent = Math.min((totalDays / task.durationDays) * 100, 100);
 
     container.innerHTML += `
       <div class="card">
         <img src="LOGOClickCoin.png">
         <div class="card-info">
           <h3>${task.name}</h3>
+          <p>Daily: ${formatPHP(task.capital * task.dailyRate)}</p>
           <p>Earned: ${formatPHP(earned)}</p>
-          <p>Total: ${formatPHP(task.totalRevenue)}</p>
-          <p>Progress: ${percent}%</p>
+          <p>Total: ${formatPHP(max)}</p>
+          <p>Progress: ${Math.floor(percent)}%</p>
 
           <div class="progress-bar">
             <div class="progress-fill" style="width:${percent}%"></div>
@@ -258,44 +260,62 @@ function loadTasks(){
 }
 </script>
 
-<!-- 🔥 AUTO INCOME SYSTEM -->
+<!-- 🔥 REAL AUTO INCOME -->
 <script>
 function startAutoIncome(){
   setInterval(()=>{
-    const user = getUser();
-    if(!user) return;
+
+    let user = getUser();
+    if(!user || !user.uid) return;
 
     let tasks = JSON.parse(localStorage.getItem("myTasks")) || [];
-    let totalEarned = 0;
+    let totalNew = 0;
+    const now = Date.now();
 
     tasks.forEach(task=>{
-      const now = Date.now();
-      const progress = Math.min((now-task.startTime)/task.duration,1);
-      totalEarned += task.totalRevenue * progress;
+
+      if(!task.lastClaim){
+        task.lastClaim = task.startTime;
+      }
+
+      const elapsed = now - task.lastClaim;
+      const oneDay = 86400000;
+
+      const days = elapsed / oneDay;
+      if(days <= 0) return;
+
+      const daily = task.capital * task.dailyRate;
+      const earned = daily * days;
+
+      totalNew += earned;
+
+      task.lastClaim = now;
     });
 
-    // 🔥 SAVE TO FIREBASE
-    if(user.uid){
+    localStorage.setItem("myTasks", JSON.stringify(tasks));
+
+    if(totalNew > 0){
+
+      user.wallet = (user.wallet || 0) + totalNew;
+
       const userRef = ref(db,'users/'+user.uid);
 
       window.set(userRef,{
         ...user,
-        wallet: Math.floor(totalEarned)
+        wallet: Math.floor(user.wallet)
       });
-    }
 
-    // 🔥 UPDATE LOCAL
-    user.wallet = Math.floor(totalEarned);
-    localStorage.setItem("currentUser", JSON.stringify(user));
+      localStorage.setItem("currentUser", JSON.stringify(user));
+    }
 
     updateBalanceUI();
     loadTasks();
 
-  },3000); // every 3 sec
+  },3000);
 }
 </script>
 
-<!-- 🔥 SYNC FROM FIREBASE -->
+<!-- 🔥 SYNC -->
 <script>
 function syncBalance(){
   const user = getUser();
@@ -319,14 +339,13 @@ function goBack(){
 }
 </script>
 
-<!-- 🔥 MENU -->
+<!-- MENU -->
 <div class="bottom-menu">
   <div class="menu-item" onclick="location.href='home.html'">HOME</div>
   <div class="menu-item active">TASK</div>
   <div class="menu-item" onclick="location.href='team.html'">TEAM</div>
   <div class="menu-item" onclick="location.href='account.html'">ACCOUNT</div>
 </div>
-
 
 <script src="support.js"></script>
 

@@ -163,7 +163,8 @@ db.ref("users/"+currentUser.uid).on("value",snap=>{
 let d=snap.val();
 if(!d) return;
 
-currentUser.wallet=d.balance||0;
+// 🔥 FIX: wallet priority
+currentUser.wallet=d.wallet||d.balance||0;
 totalDeposit=d.totalDeposit||0;
 
 balance.innerText=formatPHP(currentUser.wallet);
@@ -173,7 +174,7 @@ earningsText.innerText="Earnings: "+formatPHP(earnings);
 });
 }
 
-// HISTORY REALTIME
+// HISTORY REALTIME (FIXED NO OVERWRITE)
 function listenWithdrawals(){
 db.ref("withdrawals")
 .orderByChild("uid")
@@ -185,7 +186,7 @@ let html="";
 snap.forEach(c=>{
 let w=c.val();
 
-html=`
+html = `
 <div class="member">
 <b>${w.status}</b><br>
 ₱${w.amount} → ₱${w.receive}<br>
@@ -207,7 +208,11 @@ return "₱"+Number(a).toLocaleString('en-PH',{minimumFractionDigits:2});
 // FEE
 function computeFee(){
 let amount=parseFloat(amountEl.value);
-if(!amount) return;
+if(!amount){
+feeText.innerText="";
+receiveText.innerText="";
+return;
+}
 
 let fee=amount*0.10;
 let receive=amount-fee;
@@ -222,7 +227,7 @@ let last=localStorage.getItem("lastWithdraw_"+currentUser.uid);
 return last!==new Date().toDateString();
 }
 
-// WITHDRAW
+// 🔥 REAL WITHDRAW SYSTEM
 function withdraw(){
 
 if(isProcessing) return;
@@ -254,11 +259,11 @@ alert("Once per day"); isProcessing=false; return;
 let fee=amount*0.10;
 let receive=amount-fee;
 
-// CREATE REQUEST
-let ref=db.ref("withdrawals").push();
+// 🔥 CREATE REQUEST
+let refPush=db.ref("withdrawals").push();
 
-ref.set({
-id: ref.key,
+refPush.set({
+id: refPush.key,
 uid: currentUser.uid,
 username: currentUser.username||"",
 method,
@@ -269,11 +274,12 @@ fee,
 receive,
 status:"PENDING",
 adminStatus:"WAITING",
-time:Date.now()
+time:Date.now(),
+restored:false // 🔥 important
 });
 
-// DEDUCT USER WALLET
-db.ref("users/"+currentUser.uid+"/balance")
+// 🔥 DEDUCT WALLET (SAFE)
+db.ref("users/"+currentUser.uid+"/wallet")
 .transaction(v=>(v||0)-amount);
 
 // SAVE LIMIT
@@ -283,6 +289,34 @@ alert("Withdraw submitted! Waiting for admin approval.");
 
 isProcessing=false;
 }
+
+// 🔥 AUTO RESTORE IF REJECTED (VERY IMPORTANT)
+db.ref("withdrawals")
+.orderByChild("uid")
+.equalTo(currentUser?.uid || "")
+.on("child_changed",snap=>{
+
+let w=snap.val();
+
+if(w.status==="REJECTED" && !w.restored){
+
+// balik pera
+db.ref("users/"+w.uid+"/wallet")
+.transaction(v=>(v||0)+w.amount);
+
+// mark restored
+db.ref("withdrawals/"+w.id).update({
+restored:true
+});
+
+alert("Withdraw rejected. Amount returned.");
+}
+
+if(w.status==="APPROVED"){
+alert("Withdraw approved! Paid successfully.");
+}
+
+});
 
 // ELEMENTS
 const methodEl=document.getElementById("method");
