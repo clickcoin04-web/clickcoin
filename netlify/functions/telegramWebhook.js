@@ -17,12 +17,12 @@ exports.handler = async (event) => {
       };
     }
 
-    let reply = "❓ Unknown command";
+    let reply = "Unknown command";
 
     if (text === "/start") {
-      reply = "👋 Welcome to ClickCoin!";
+      reply = "Welcome to ClickCoin!";
     } else if (text === "hello") {
-      reply = "👋 Hello!";
+      reply = "Hello!";
     }
 
     console.log("👉 Sending reply to:", chatId);
@@ -30,7 +30,7 @@ exports.handler = async (event) => {
 
     const https = require("https");
 
-    const data = JSON.stringify({
+    const postData = JSON.stringify({
       chat_id: chatId,
       text: reply
     });
@@ -40,21 +40,21 @@ exports.handler = async (event) => {
       path: `/bot${TOKEN}/sendMessage`,
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Content-Length": data.length
+        "Content-Type": "application/json"
+        // ❌ WALANG Content-Length (eto ang fix)
       }
     };
 
     await new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
-        let body = "";
+        let responseData = "";
 
         res.on("data", (chunk) => {
-          body += chunk;
+          responseData += chunk;
         });
 
         res.on("end", () => {
-          console.log("📤 Telegram response:", body);
+          console.log("📤 Telegram response:", responseData);
           resolve();
         });
       });
@@ -64,7 +64,7 @@ exports.handler = async (event) => {
         reject(e);
       });
 
-      req.write(data);
+      req.write(postData);
       req.end();
     });
 
