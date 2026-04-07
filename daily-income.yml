@@ -1,0 +1,15 @@
+name: Daily Income Auto
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # every day (UTC)
+  workflow_dispatch: # manual trigger
+
+jobs:
+  run-daily-income:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Daily Income API
+        run: |
+          curl -X GET https://clickcoin.site/.netlify/functions/dailyIncome
