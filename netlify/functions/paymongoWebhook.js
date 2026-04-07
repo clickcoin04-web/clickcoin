@@ -96,7 +96,7 @@ exports.handler = async (event) => {
 
     const attributes = verifyData.data.attributes;
 
-    const reference = attributes.remarks;
+    const reference = attributes.remarks || attributes.metadata?.reference;
     const amount = attributes.amount / 100;
 
     await logDebug("STEP_6_PAYMENT_DATA", { reference, amount });

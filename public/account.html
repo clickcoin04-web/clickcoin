@@ -233,7 +233,7 @@ document.getElementById("wallet").innerText = formatPHP(balance);
 
 // ✅ MOBILE
 let mobile = data.mobile || "";
-if(mobile && !mobile.startsWith("+63")){
+if(mobile && !mobile.startsWith("-")){
 mobile = "+63"+mobile.replace(/^0/,"");
 }
 document.getElementById("mobile").innerText = mobile;
