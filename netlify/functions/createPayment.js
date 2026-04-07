@@ -12,6 +12,16 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
+// 🔥 SAFE FETCH (WITH TIMEOUT)
+async function fetchWithTimeout(url, options, timeout = 10000) {
+  return Promise.race([
+    fetch(url, options),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), timeout)
+    )
+  ]);
+}
+
 exports.handler = async (event) => {
 
   // ⚡ PRE-WARM
@@ -35,7 +45,7 @@ exports.handler = async (event) => {
     const amount = Number(body.amount);
     const userId = body.uid;
 
-    if (!amount || !userId) {
+    if (!amount || amount < 50 || !userId) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Invalid data" })
@@ -45,16 +55,8 @@ exports.handler = async (event) => {
     // 🔥 GENERATE REFERENCE
     const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
 
-    // 🔥 SAVE TRANSACTION
-    await db.ref("transactions/" + reference).set({
-      userId,
-      amount,
-      status: "PENDING",
-      createdAt: Date.now()
-    });
-
-    // 🔥 PAYMONGO REQUEST
-    const res = await fetch("https://api.paymongo.com/v1/links", {
+    // 🔥 PAYMONGO REQUEST FIRST (IMPORTANT)
+    const res = await fetchWithTimeout("https://api.paymongo.com/v1/links", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -64,43 +66,57 @@ exports.handler = async (event) => {
         data: {
           attributes: {
             amount: Math.round(amount * 100),
-            description: "Deposit",
+            description: "ClickCoin Deposit",
             remarks: reference
           }
         }
       })
-    });
+    }, 10000);
 
     const data = await res.json();
 
-    // 🔥 LOG FULL RESPONSE
     console.log("PAYMONGO RESPONSE:", JSON.stringify(data));
 
-    // 🔥 CHECK
-    if (!data.data) {
+    // 🔥 HARD CHECK (NO CHECKOUT = FAIL)
+    if (!data || !data.data || !data.data.attributes || !data.data.attributes.checkout_url) {
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: "Payment failed",
+          error: "PayMongo failed",
           details: data
         })
       };
     }
 
+    const checkout_url = data.data.attributes.checkout_url;
+
+    // 🔥 SAVE ONLY IF SUCCESS
+    await db.ref("transactions/" + reference).set({
+      userId,
+      amount,
+      reference,
+      checkout_url,
+      status: "PENDING",
+      createdAt: Date.now()
+    });
+
+    // 🔥 FINAL RESPONSE (DIRECT)
     return {
       statusCode: 200,
       body: JSON.stringify({
-        checkout_url: data.data.attributes.checkout_url
+        checkout_url
       })
     };
 
   } catch (err) {
+
     console.error("ERROR:", err);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: err.message
+        error: "Server error",
+        message: err.message
       })
     };
   }
