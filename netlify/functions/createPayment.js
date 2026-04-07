@@ -1,8 +1,27 @@
 const fetch = require("node-fetch");
 const crypto = require("crypto");
-const { createTransaction } = require("./_transactions");
+const admin = require("firebase-admin");
+
+// 🔥 INIT FIREBASE
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
+    databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+  });
+}
+
+const db = admin.database();
 
 exports.handler = async (event) => {
+
+  // ⚡ PRE-WARM (para walang cold start delay)
+  if (event.httpMethod === "GET") {
+    return {
+      statusCode: 200,
+      body: "warm"
+    };
+  }
+
   const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
 
   if (!PAYMONGO_SECRET) {
@@ -24,18 +43,61 @@ exports.handler = async (event) => {
   }
 
   const amount = Number(body.amount);
-  const userId = body.userId;
+  const userId = body.uid;
 
-  // 🔥 VALIDATION (ADDED)
+  // 🔥 BASIC VALIDATION
   if (!amount || isNaN(amount) || amount <= 0 || !userId) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Invalid amount or userId" }),
+      body: JSON.stringify({ error: "Invalid amount or uid" }),
+    };
+  }
+
+  // 🔥 LIMIT MAX AMOUNT
+  if (amount > 50000) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Limit exceeded" })
     };
   }
 
   try {
-    // 🔥 STRONGER REFERENCE (ANTI-GUESS)
+
+    // 🔥 ANTI-SPAM (10 sec cooldown)
+    const lastRef = await db.ref("users/" + userId + "/lastPayment").once("value");
+
+    if (lastRef.exists()) {
+      const lastTime = lastRef.val();
+      if (Date.now() - lastTime < 10000) {
+        return {
+          statusCode: 429,
+          body: JSON.stringify({ error: "Too many requests" })
+        };
+      }
+    }
+
+    await db.ref("users/" + userId + "/lastPayment").set(Date.now());
+
+    // 🔥 BLOCK MULTIPLE PENDING
+    const existing = await db.ref("transactions")
+      .orderByChild("userId")
+      .equalTo(userId)
+      .once("value");
+
+    let active = false;
+
+    existing.forEach(c => {
+      if (c.val().status === "PENDING") active = true;
+    });
+
+    if (active) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Pending payment exists" })
+      };
+    }
+
+    // 🔥 GENERATE SECURE REFERENCE
     const reference =
       "cc_" +
       Date.now() +
@@ -44,17 +106,18 @@ exports.handler = async (event) => {
 
     console.log("💰 Creating payment:", { userId, amount, reference });
 
-    // 🔥 SAVE TRANSACTION FIRST (same logic mo)
-    await createTransaction({
+    // 🔥 SAVE TRANSACTION
+    await db.ref("transactions/" + reference).set({
       userId,
-      type: "deposit",
       amount,
-      reference
+      type: "deposit",
+      status: "PENDING",
+      createdAt: Date.now()
     });
 
-    // 🔥 TIMEOUT PROTECTION
+    // ⚡ FAST FETCH (NO DELAY)
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch("https://api.paymongo.com/v1/links", {
       method: "POST",
@@ -66,12 +129,10 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: Math.round(amount * 100), // 🔥 ensure integer
-            description: "Deposit",
+            amount: Math.round(amount * 100),
+            description: "ClickCoin Deposit",
             remarks: reference,
-            metadata: {
-              userId
-            }
+            metadata: { userId }
           },
         },
       }),
@@ -82,17 +143,10 @@ exports.handler = async (event) => {
 
     const data = await response.json();
 
-    // 🔥 FAIL SAFE (ADDED)
+    // 🔥 FAIL SAFE
     if (!data.data || !data.data.attributes) {
       console.error("❌ PayMongo error:", data);
-
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: "Payment provider error",
-          details: data
-        }),
-      };
+      throw new Error("Payment provider error");
     }
 
     return {

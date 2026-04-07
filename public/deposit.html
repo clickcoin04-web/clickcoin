@@ -211,14 +211,15 @@ function setAmount(val){
   amount.value = val;
 }
 
+/* RETRY */
 async function fetchWithRetry(url, options, retries=3){
   try{
     const res = await fetch(url, options);
-    if(!res.ok) throw new Error("Request failed");
+    if(!res.ok) throw new Error();
     return res;
   }catch(e){
     if(retries === 0) throw e;
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 3000));
     return fetchWithRetry(url, options, retries-1);
   }
 }
@@ -240,18 +241,18 @@ async function payNow(){
 
   try{
 
-    const res = await fetchWithRetry("/.netlify/functions/createPayment", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        amount: amt,
-        uid: currentUser.uid
-      })
-    });
+    const res = await fetch("/.netlify/functions/createPayment", {
+  method:"POST",
+  headers:{ "Content-Type":"application/json" },
+  body: JSON.stringify({
+    amount: amt,
+    uid: currentUser.uid
+  })
+});
 
     const data = await res.json();
 
-    if(!data || !data.checkout_url){
+    if(!data.checkout_url){
       alert("Payment error");
       isPaying=false;
       return;
@@ -265,7 +266,6 @@ async function payNow(){
     window.location.href = data.checkout_url;
 
   }catch(e){
-    console.error(e);
     alert("Server busy, please try again.");
   }
 
