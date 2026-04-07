@@ -252,11 +252,11 @@ async function payNow(){
 
     const data = await res.json();
 
-    if(!data.checkout_url){
-      alert("Payment error");
-      isPaying=false;
-      return;
-    }
+   if(!data || !data.checkout_url){
+  console.error(data);
+  alert("Payment failed: " + (data.error || "Unknown error"));
+  return;
+}
 
     localStorage.setItem("pendingDeposit", JSON.stringify({
       amount: amt,
