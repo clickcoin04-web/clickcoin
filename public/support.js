@@ -16,8 +16,8 @@
       }
 
       #tg-btn {
-        width: 65px;
-        height: 65px;
+        width: 50px;
+        height: 50px;
         border-radius: 50%;
         background: linear-gradient(135deg, #00c6ff, #0072ff);
         display: flex;
