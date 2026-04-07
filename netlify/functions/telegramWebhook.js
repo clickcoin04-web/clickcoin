@@ -30,7 +30,7 @@ exports.handler = async (event) => {
         : "❌ You are not admin";
     }
 
-    // 🔥 BUILT-IN FETCH (NO REQUIRE)
+    // ✅ NO node-fetch
     const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: "POST",
       headers: {
