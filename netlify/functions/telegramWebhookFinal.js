@@ -2,7 +2,7 @@ exports.handler = async (event) => {
   const https = require("https");
 
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const ADMIN_ID = "2080584414"; // palitan kung kailangan
+  const ADMIN_ID = process.env.ADMIN_CHAT_ID;
 
   try {
     const body = JSON.parse(event.body || "{}");
