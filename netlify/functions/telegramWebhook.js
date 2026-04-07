@@ -31,7 +31,7 @@ exports.handler = async (event) => {
     console.log("👉 CLEAN:", text);
     console.log("👉 ADMIN:", isAdmin);
 
-    let reply = "";
+    let reply = "NEW VERSION ACTIVE";
 
     // =========================
     // ✅ COMMAND HANDLER (FINAL FIX)
