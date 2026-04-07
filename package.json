@@ -1,7 +1,11 @@
 {
   "name": "clickcoin",
   "version": "1.0.0",
+  "description": "ClickCoin Netlify Functions Backend",
+  "main": "index.js",
+  "type": "commonjs",
   "dependencies": {
+    "mongodb": "^6.5.0",
     "node-fetch": "^2.6.7",
     "firebase-admin": "^11.10.1"
   }
