@@ -14,157 +14,94 @@ const db = admin.database();
 
 exports.handler = async (event) => {
 
-  // ⚡ PRE-WARM (para walang cold start delay)
+  // ⚡ PRE-WARM
   if (event.httpMethod === "GET") {
-    return {
-      statusCode: 200,
-      body: "warm"
-    };
-  }
-
-  const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
-
-  if (!PAYMONGO_SECRET) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Missing API key" }),
-    };
-  }
-
-  let body = {};
-
-  try {
-    body = JSON.parse(event.body || "{}");
-  } catch (e) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Invalid JSON" }),
-    };
-  }
-
-  const amount = Number(body.amount);
-  const userId = body.uid;
-
-  // 🔥 BASIC VALIDATION
-  if (!amount || isNaN(amount) || amount <= 0 || !userId) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Invalid amount or uid" }),
-    };
-  }
-
-  // 🔥 LIMIT MAX AMOUNT
-  if (amount > 50000) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Limit exceeded" })
-    };
+    return { statusCode: 200, body: "warm" };
   }
 
   try {
 
-    // 🔥 ANTI-SPAM (10 sec cooldown)
-    const lastRef = await db.ref("users/" + userId + "/lastPayment").once("value");
+    const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
 
-    if (lastRef.exists()) {
-      const lastTime = lastRef.val();
-      if (Date.now() - lastTime < 10000) {
-        return {
-          statusCode: 429,
-          body: JSON.stringify({ error: "Too many requests" })
-        };
-      }
-    }
-
-    await db.ref("users/" + userId + "/lastPayment").set(Date.now());
-
-    // 🔥 BLOCK MULTIPLE PENDING
-    const existing = await db.ref("transactions")
-      .orderByChild("userId")
-      .equalTo(userId)
-      .once("value");
-
-    let active = false;
-
-    existing.forEach(c => {
-      if (c.val().status === "PENDING") active = true;
-    });
-
-    if (active) {
+    if (!PAYMONGO_SECRET) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Pending payment exists" })
+        statusCode: 500,
+        body: JSON.stringify({ error: "Missing PAYMONGO_SECRET" })
       };
     }
 
-    // 🔥 GENERATE SECURE REFERENCE
-    const reference =
-      "cc_" +
-      Date.now() +
-      "_" +
-      crypto.randomBytes(4).toString("hex");
+    const body = JSON.parse(event.body || "{}");
 
-    console.log("💰 Creating payment:", { userId, amount, reference });
+    const amount = Number(body.amount);
+    const userId = body.uid;
+
+    if (!amount || !userId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Invalid data" })
+      };
+    }
+
+    // 🔥 GENERATE REFERENCE
+    const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
 
     // 🔥 SAVE TRANSACTION
     await db.ref("transactions/" + reference).set({
       userId,
       amount,
-      type: "deposit",
       status: "PENDING",
       createdAt: Date.now()
     });
 
-    // ⚡ FAST FETCH (NO DELAY)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
-    const response = await fetch("https://api.paymongo.com/v1/links", {
+    // 🔥 PAYMONGO REQUEST
+    const res = await fetch("https://api.paymongo.com/v1/links", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:
-          "Basic " + Buffer.from(PAYMONGO_SECRET + ":").toString("base64"),
+        Authorization: "Basic " + Buffer.from(PAYMONGO_SECRET + ":").toString("base64")
       },
       body: JSON.stringify({
         data: {
           attributes: {
             amount: Math.round(amount * 100),
-            description: "ClickCoin Deposit",
-            remarks: reference,
-            metadata: { userId }
-          },
-        },
-      }),
-      signal: controller.signal
+            description: "Deposit",
+            remarks: reference
+          }
+        }
+      })
     });
 
-    clearTimeout(timeout);
+    const data = await res.json();
 
-    const data = await response.json();
+    // 🔥 LOG FULL RESPONSE
+    console.log("PAYMONGO RESPONSE:", JSON.stringify(data));
 
-    // 🔥 FAIL SAFE
-    if (!data.data || !data.data.attributes) {
-      console.error("❌ PayMongo error:", data);
-      throw new Error("Payment provider error");
+    // 🔥 CHECK
+    if (!data.data) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Payment failed",
+          details: data
+        })
+      };
     }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        checkout_url: data.data.attributes.checkout_url,
-        reference
-      }),
+        checkout_url: data.data.attributes.checkout_url
+      })
     };
 
   } catch (err) {
-    console.error("❌ createPayment error:", err);
+    console.error("ERROR:", err);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: err.message || "Internal error"
-      }),
+        error: err.message
+      })
     };
   }
 };
