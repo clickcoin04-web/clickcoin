@@ -1,6 +1,8 @@
 exports.handler = async (event) => {
+  const https = require("https");
+
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-  const ADMIN_ID = "2080584414"; // string para safe compare
+  const ADMIN_ID = "2080584414"; // palitan kung kailangan
 
   try {
     const body = JSON.parse(event.body || "{}");
@@ -8,7 +10,7 @@ exports.handler = async (event) => {
     console.log("📩 Telegram update:", JSON.stringify(body));
 
     const chatId = body.message?.chat?.id?.toString();
-    let text = body.message?.text || "";
+    let rawText = body.message?.text || "";
 
     if (!chatId) {
       return {
@@ -17,19 +19,26 @@ exports.handler = async (event) => {
       };
     }
 
-    // 🔥 FIX: normalize text (IMPORTANT)
-    text = text.trim().toLowerCase();
+    // 🔥 CLEAN TEXT (SUPER SAFE)
+    let text = rawText
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
 
-    console.log("👉 TEXT RECEIVED:", text);
+    console.log("👉 RAW TEXT:", JSON.stringify(rawText));
+    console.log("👉 CLEAN TEXT:", text);
 
     const isAdmin = chatId === ADMIN_ID;
 
+    console.log("👉 CHAT ID:", chatId);
+    console.log("👉 IS ADMIN:", isAdmin);
+
     let reply = "";
 
-    // 🌐 PUBLIC COMMANDS (LAHAT MAY ACCESS)
+    // 🌐 PUBLIC COMMANDS
     if (text === "/start") {
       reply =
-`Welcome to ClickCoin!
+`👋 Welcome to ClickCoin!
 
 Commands:
 menu - open menu
@@ -37,68 +46,67 @@ help - support
 admin - admin panel`;
     }
 
-    else if (text === "menu") {
+    else if (text.includes("menu")) {
       reply =
-`Main Menu:
+`📋 Main Menu:
 
 1. account
 2. balance
 3. support`;
     }
 
-    else if (text === "help" || text === "support") {
-      reply = "Support will reply soon.";
+    else if (text.includes("help") || text.includes("support")) {
+      reply = "📩 Support will reply soon.";
     }
 
-    else if (text === "account") {
-      reply = `Your account ID: ${chatId}`;
+    else if (text.includes("account")) {
+      reply = `🆔 Your account ID: ${chatId}`;
     }
 
     else if (text === "balance") {
-      reply = "Your balance: (connect later)";
+      reply = "💰 Your balance: (connect later)";
     }
 
     // 🔐 ADMIN PANEL
-    else if (text === "admin") {
+    else if (text.includes("admin")) {
       if (isAdmin) {
         reply =
-`ADMIN PANEL
+`🔐 ADMIN PANEL
 
 users - view users
 balance_admin - system balance
 withdraw - pending withdrawals`;
       } else {
-        reply = "Access denied.";
+        reply = "❌ Access denied.";
       }
     }
 
     // 🔐 ADMIN COMMANDS
     else if (text === "users" && isAdmin) {
-      reply = "Total users: (connect database)";
+      reply = "👥 Total users: (connect database)";
     }
 
     else if (text === "balance_admin" && isAdmin) {
-      reply = "System balance: (connect PayMongo)";
+      reply = "💰 System balance: (connect PayMongo)";
     }
 
     else if (text === "withdraw" && isAdmin) {
-      reply = "Pending withdrawals: (connect DB)";
+      reply = "📤 Pending withdrawals: (connect DB)";
     }
 
-    // ❗ FALLBACK (HINDI NA BLANK)
+    // ❗ FALLBACK
     else {
       reply =
-`Unknown command.
+`❌ Unknown command
 
 Type:
 menu - show options
 help - support`;
     }
 
-    console.log("FINAL REPLY:", reply);
+    console.log("👉 FINAL REPLY:", reply);
 
-    const https = require("https");
-
+    // 📤 SEND MESSAGE TO TELEGRAM
     const postData = JSON.stringify({
       chat_id: chatId,
       text: reply
@@ -115,21 +123,21 @@ help - support`;
 
     await new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
-        let responseData = "";
+        let data = "";
 
         res.on("data", (chunk) => {
-          responseData += chunk;
+          data += chunk;
         });
 
         res.on("end", () => {
-          console.log("📤 Telegram response:", responseData);
+          console.log("📤 Telegram response:", data);
           resolve();
         });
       });
 
-      req.on("error", (e) => {
-        console.error("❌ REQUEST ERROR:", e);
-        reject(e);
+      req.on("error", (err) => {
+        console.error("❌ REQUEST ERROR:", err);
+        reject(err);
       });
 
       req.write(postData);
