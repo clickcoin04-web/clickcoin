@@ -1,5 +1,6 @@
 exports.handler = async (event) => {
   const https = require("https");
+  const fetch = require("node-fetch");
 
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const ADMIN_ID = process.env.ADMIN_CHAT_ID;
@@ -9,17 +10,15 @@ exports.handler = async (event) => {
 
     console.log("📩 Telegram update:", JSON.stringify(body));
 
-    const chatId = body.message?.chat?.id?.toString();
-    const rawText = body.message?.text || "";
-
-    if (!chatId) {
-      return {
-        statusCode: 200,
-        body: "No chat ID"
-      };
+    const message = body.message;
+    if (!message) {
+      return { statusCode: 200, body: "No message" };
     }
 
-    // 🔥 CLEAN TEXT (FINAL)
+    const chatId = message.chat.id.toString();
+    const rawText = message.text || "";
+
+    // 🔥 CLEAN TEXT
     const text = rawText
       .toLowerCase()
       .replace(/\s+/g, " ")
@@ -27,39 +26,93 @@ exports.handler = async (event) => {
 
     const isAdmin = chatId === ADMIN_ID;
 
-    console.log("👉 RAW:", JSON.stringify(rawText));
-    console.log("👉 CLEAN:", text);
+    console.log("👉 TEXT:", text);
     console.log("👉 ADMIN:", isAdmin);
 
-    let reply = "NEW VERSION ACTIVE";
+    let reply = "";
 
     // =========================
-    // ✅ COMMAND HANDLER (FINAL FIX)
+    // 🔥 COMMANDS (FULL SYSTEM)
     // =========================
 
     const commands = {
-      "/start": () => `👋 Welcome to ClickCoin!
+
+      "/start": async () => {
+        return `👋 Welcome to ClickCoin 💰
 
 Commands:
 menu
-help
-admin`,
+deposit
+balance
+help`;
+      },
 
-      "menu": () => `📋 Main Menu:
+      "menu": async () => {
+        return `📋 Main Menu:
 
 account
 balance
-support`,
+deposit
+support`;
+      },
 
-      "help": () => "📩 Support will reply soon.",
-      "support": () => "📩 Support will reply soon.",
+      "help": async () => {
+        return "📩 Support will reply soon.";
+      },
 
-      "account": () => `🆔 Your account ID: ${chatId}`,
+      "support": async () => {
+        return "📩 Support will reply soon.";
+      },
 
-      "balance": () => "💰 Your balance: (connect later)",
+      "account": async () => {
+        return `🆔 Your account ID:
+${chatId}`;
+      },
 
-      "admin": () => {
+      // =========================
+      // 💰 PAYMONGO DEPOSIT
+      // =========================
+      "deposit": async () => {
+        try {
+          const res = await fetch("https://clickcoin.site/.netlify/functions/createPayment", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              amount: 100,
+              userId: chatId
+            })
+          });
+
+          const data = await res.json();
+
+          if (!data.checkout_url) {
+            return "❌ Payment error. Try again.";
+          }
+
+          return `💳 Deposit here:
+${data.checkout_url}`;
+
+        } catch (err) {
+          console.error("❌ PayMongo error:", err);
+          return "❌ Payment failed.";
+        }
+      },
+
+      // =========================
+      // 💰 BALANCE (READY FOR DB)
+      // =========================
+      "balance": async () => {
+        return "💰 Your balance: 0 (connect DB)";
+      },
+
+      // =========================
+      // 🔐 ADMIN PANEL
+      // =========================
+      "admin": async () => {
         if (!isAdmin) return "❌ Access denied.";
+
         return `🔐 ADMIN PANEL
 
 users
@@ -67,38 +120,41 @@ balance_admin
 withdraw`;
       },
 
-      "users": () => {
+      "users": async () => {
         if (!isAdmin) return "❌ Admin only.";
         return "👥 Total users: (connect database)";
       },
 
-      "balance_admin": () => {
+      "balance_admin": async () => {
         if (!isAdmin) return "❌ Admin only.";
         return "💰 System balance: (connect PayMongo)";
       },
 
-      "withdraw": () => {
+      "withdraw": async () => {
         if (!isAdmin) return "❌ Admin only.";
         return "📤 Pending withdrawals: (connect DB)";
       }
+
     };
 
-    // 👉 EXECUTE COMMAND
+    // =========================
+    // 🚀 EXECUTE COMMAND
+    // =========================
+
     if (commands[text]) {
-      reply = commands[text]();
+      reply = await commands[text]();
     } else {
-      reply =
-`❌ Unknown command
+      reply = `❌ Unknown command
 
 Type:
 menu
 help`;
     }
 
-    console.log("👉 FINAL REPLY:", reply);
+    console.log("👉 REPLY:", reply);
 
     // =========================
-    // 📤 SEND TO TELEGRAM
+    // 📤 SEND MESSAGE
     // =========================
 
     const postData = JSON.stringify({
@@ -119,21 +175,15 @@ help`;
       const req = https.request(options, (res) => {
         let data = "";
 
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
+        res.on("data", chunk => data += chunk);
 
         res.on("end", () => {
-          console.log("📤 Telegram response:", data);
+          console.log("📤 Telegram:", data);
           resolve();
         });
       });
 
-      req.on("error", (err) => {
-        console.error("❌ REQUEST ERROR:", err);
-        reject(err);
-      });
-
+      req.on("error", reject);
       req.write(postData);
       req.end();
     });
