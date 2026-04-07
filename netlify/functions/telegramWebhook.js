@@ -1,5 +1,6 @@
 exports.handler = async (event) => {
   const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const ADMIN_ID = 2080584414;
 
   try {
     const body = JSON.parse(event.body || "{}");
@@ -10,7 +11,6 @@ exports.handler = async (event) => {
     const text = body.message?.text;
 
     if (!chatId) {
-      console.log("❌ Walang chatId");
       return {
         statusCode: 200,
         body: "No chat ID"
@@ -19,14 +19,39 @@ exports.handler = async (event) => {
 
     let reply = "Unknown command";
 
+    // 🔐 ADMIN CHECK
+    const isAdmin = chatId == ADMIN_ID;
+
     if (text === "/start") {
       reply = "Welcome to ClickCoin!";
-    } else if (text === "hello") {
+    } 
+    else if (text === "hello") {
       reply = "Hello!";
+    } 
+    else if (text === "admin") {
+      if (isAdmin) {
+        reply =
+`🔐 ADMIN PANEL
+
+Commands:
+users - view users
+balance - check system
+withdraw - pending withdrawals`;
+      } else {
+        reply = "Access denied.";
+      }
     }
 
-    console.log("👉 Sending reply to:", chatId);
-    console.log("👉 Message:", reply);
+    // 👥 SAMPLE COMMANDS
+    else if (text === "users" && isAdmin) {
+      reply = "👥 Total users: (connect mo sa database later)";
+    }
+    else if (text === "balance" && isAdmin) {
+      reply = "💰 System balance: (connect PayMongo later)";
+    }
+    else if (text === "withdraw" && isAdmin) {
+      reply = "📤 Pending withdrawals: (connect DB later)";
+    }
 
     const https = require("https");
 
@@ -41,7 +66,6 @@ exports.handler = async (event) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
-        // ❌ WALANG Content-Length (eto ang fix)
       }
     };
 
