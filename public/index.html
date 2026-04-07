@@ -124,7 +124,7 @@ cursor:pointer;
 <div class="input-group">
 <span>🔒</span>
 <input type="password" id="password" placeholder="Password">
-<span onclick="togglePass('password', this)">👁</span>
+<span id="toggleEye" onclick="togglePass('password', this)">👁</span>
 </div>
 
 <button id="loginBtn" class="login-btn" onclick="login()">LOGIN</button>
@@ -274,6 +274,18 @@ window.location.replace("home.html");
 }
 }
 }, 500);
+
+function togglePass(id, el){
+  const input = document.getElementById(id);
+
+  if(input.type === "password"){
+    input.type = "text";
+    el.innerText = "🙈";
+  } else {
+    input.type = "password";
+    el.innerText = "👁";
+  }
+}
 
 </script>
 
