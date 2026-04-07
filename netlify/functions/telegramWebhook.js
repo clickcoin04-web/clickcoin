@@ -95,7 +95,7 @@ menu - show options
 help - support`;
     }
 
-    console.log("👉 FINAL REPLY:", reply);
+    console.log("FINAL REPLY:", reply);
 
     const https = require("https");
 
