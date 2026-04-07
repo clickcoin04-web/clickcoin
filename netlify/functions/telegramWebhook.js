@@ -34,82 +34,59 @@ exports.handler = async (event) => {
     let reply = "";
 
     // =========================
-    // ✅ PRIORITY (EXACT MATCH)
+    // ✅ COMMAND HANDLER (FINAL FIX)
     // =========================
 
-    if (text === "/start") {
-      reply =
-`👋 Welcome to ClickCoin!
+    const commands = {
+      "/start": () => `👋 Welcome to ClickCoin!
 
 Commands:
-menu - open menu
-help - support
-admin - admin panel`;
-    }
+menu
+help
+admin`,
 
-    else if (text === "admin") {
-      if (isAdmin) {
-        reply =
-`🔐 ADMIN PANEL
-
-users - view users
-balance_admin - system balance
-withdraw - pending withdrawals`;
-      } else {
-        reply = "❌ Access denied.";
-      }
-    }
-
-    else if (text === "users") {
-      if (isAdmin) {
-        reply = "👥 Total users: (connect database)";
-      } else {
-        reply = "❌ Admin only.";
-      }
-    }
-
-    else if (text === "balance_admin") {
-      if (isAdmin) {
-        reply = "💰 System balance: (connect PayMongo)";
-      } else {
-        reply = "❌ Admin only.";
-      }
-    }
-
-    else if (text === "withdraw") {
-      if (isAdmin) {
-        reply = "📤 Pending withdrawals: (connect DB)";
-      } else {
-        reply = "❌ Admin only.";
-      }
-    }
-
-    else if (text === "menu") {
-      reply =
-`📋 Main Menu:
+      "menu": () => `📋 Main Menu:
 
 account
 balance
-support`;
-    }
+support`,
 
-    else if (text === "account") {
-      reply = `🆔 Your account ID: ${chatId}`;
-    }
+      "help": () => "📩 Support will reply soon.",
+      "support": () => "📩 Support will reply soon.",
 
-    else if (text === "balance") {
-      reply = "💰 Your balance: (connect later)";
-    }
+      "account": () => `🆔 Your account ID: ${chatId}`,
 
-    else if (text === "help" || text === "support") {
-      reply = "📩 Support will reply soon.";
-    }
+      "balance": () => "💰 Your balance: (connect later)",
 
-    // =========================
-    // ❗ FALLBACK
-    // =========================
+      "admin": () => {
+        if (!isAdmin) return "❌ Access denied.";
+        return `🔐 ADMIN PANEL
 
-    else {
+users
+balance_admin
+withdraw`;
+      },
+
+      "users": () => {
+        if (!isAdmin) return "❌ Admin only.";
+        return "👥 Total users: (connect database)";
+      },
+
+      "balance_admin": () => {
+        if (!isAdmin) return "❌ Admin only.";
+        return "💰 System balance: (connect PayMongo)";
+      },
+
+      "withdraw": () => {
+        if (!isAdmin) return "❌ Admin only.";
+        return "📤 Pending withdrawals: (connect DB)";
+      }
+    };
+
+    // 👉 EXECUTE COMMAND
+    if (commands[text]) {
+      reply = commands[text]();
+    } else {
       reply =
 `❌ Unknown command
 
