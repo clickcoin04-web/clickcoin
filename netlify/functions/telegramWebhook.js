@@ -10,7 +10,7 @@ exports.handler = async (event) => {
     console.log("📩 Telegram update:", JSON.stringify(body));
 
     const chatId = body.message?.chat?.id?.toString();
-    let rawText = body.message?.text || "";
+    const rawText = body.message?.text || "";
 
     if (!chatId) {
       return {
@@ -19,23 +19,24 @@ exports.handler = async (event) => {
       };
     }
 
-    // 🔥 CLEAN TEXT (SUPER SAFE)
-    let text = rawText
+    // 🔥 CLEAN TEXT (FINAL)
+    const text = rawText
       .toLowerCase()
       .replace(/\s+/g, " ")
       .trim();
 
-    console.log("👉 RAW TEXT:", JSON.stringify(rawText));
-    console.log("👉 CLEAN TEXT:", text);
-
     const isAdmin = chatId === ADMIN_ID;
 
-    console.log("👉 CHAT ID:", chatId);
-    console.log("👉 IS ADMIN:", isAdmin);
+    console.log("👉 RAW:", JSON.stringify(rawText));
+    console.log("👉 CLEAN:", text);
+    console.log("👉 ADMIN:", isAdmin);
 
     let reply = "";
 
-    // 🌐 PUBLIC COMMANDS
+    // =========================
+    // ✅ PRIORITY (EXACT MATCH)
+    // =========================
+
     if (text === "/start") {
       reply =
 `👋 Welcome to ClickCoin!
@@ -46,29 +47,7 @@ help - support
 admin - admin panel`;
     }
 
-    else if (text.includes("menu")) {
-      reply =
-`📋 Main Menu:
-
-1. account
-2. balance
-3. support`;
-    }
-
-    else if (text.includes("help") || text.includes("support")) {
-      reply = "📩 Support will reply soon.";
-    }
-
-    else if (text.includes("account")) {
-      reply = `🆔 Your account ID: ${chatId}`;
-    }
-
-    else if (text === "balance") {
-      reply = "💰 Your balance: (connect later)";
-    }
-
-    // 🔐 ADMIN PANEL
-    else if (text.includes("admin")) {
+    else if (text === "admin") {
       if (isAdmin) {
         reply =
 `🔐 ADMIN PANEL
@@ -81,32 +60,70 @@ withdraw - pending withdrawals`;
       }
     }
 
-    // 🔐 ADMIN COMMANDS
-    else if (text === "users" && isAdmin) {
-      reply = "👥 Total users: (connect database)";
+    else if (text === "users") {
+      if (isAdmin) {
+        reply = "👥 Total users: (connect database)";
+      } else {
+        reply = "❌ Admin only.";
+      }
     }
 
-    else if (text === "balance_admin" && isAdmin) {
-      reply = "💰 System balance: (connect PayMongo)";
+    else if (text === "balance_admin") {
+      if (isAdmin) {
+        reply = "💰 System balance: (connect PayMongo)";
+      } else {
+        reply = "❌ Admin only.";
+      }
     }
 
-    else if (text === "withdraw" && isAdmin) {
-      reply = "📤 Pending withdrawals: (connect DB)";
+    else if (text === "withdraw") {
+      if (isAdmin) {
+        reply = "📤 Pending withdrawals: (connect DB)";
+      } else {
+        reply = "❌ Admin only.";
+      }
     }
 
+    else if (text === "menu") {
+      reply =
+`📋 Main Menu:
+
+account
+balance
+support`;
+    }
+
+    else if (text === "account") {
+      reply = `🆔 Your account ID: ${chatId}`;
+    }
+
+    else if (text === "balance") {
+      reply = "💰 Your balance: (connect later)";
+    }
+
+    else if (text === "help" || text === "support") {
+      reply = "📩 Support will reply soon.";
+    }
+
+    // =========================
     // ❗ FALLBACK
+    // =========================
+
     else {
       reply =
 `❌ Unknown command
 
 Type:
-menu - show options
-help - support`;
+menu
+help`;
     }
 
     console.log("👉 FINAL REPLY:", reply);
 
-    // 📤 SEND MESSAGE TO TELEGRAM
+    // =========================
+    // 📤 SEND TO TELEGRAM
+    // =========================
+
     const postData = JSON.stringify({
       chat_id: chatId,
       text: reply
