@@ -2,18 +2,23 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 
-// 🔥 INIT FIREBASE
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
-    databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
-  });
+// 🔥 SAFE FIREBASE INIT
+let db = null;
+
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
+      databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app"
+    });
+  }
+  db = admin.database();
+} catch (e) {
+  console.error("FIREBASE INIT FAILED:", e.message);
 }
 
-const db = admin.database();
-
-// 🔥 SAFE FETCH (WITH TIMEOUT)
-async function fetchWithTimeout(url, options, timeout = 10000) {
+// 🔥 TIMEOUT FETCH
+async function fetchWithTimeout(url, options, timeout = 8000) {
   return Promise.race([
     fetch(url, options),
     new Promise((_, reject) =>
@@ -24,7 +29,6 @@ async function fetchWithTimeout(url, options, timeout = 10000) {
 
 exports.handler = async (event) => {
 
-  // ⚡ PRE-WARM
   if (event.httpMethod === "GET") {
     return { statusCode: 200, body: "warm" };
   }
@@ -52,10 +56,9 @@ exports.handler = async (event) => {
       };
     }
 
-    // 🔥 GENERATE REFERENCE
     const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(4).toString("hex");
 
-    // 🔥 PAYMONGO REQUEST FIRST (IMPORTANT)
+    // 🔥 CALL PAYMONGO FIRST (ALWAYS)
     const res = await fetchWithTimeout("https://api.paymongo.com/v1/links", {
       method: "POST",
       headers: {
@@ -66,18 +69,17 @@ exports.handler = async (event) => {
         data: {
           attributes: {
             amount: Math.round(amount * 100),
-            description: "ClickCoin Deposit",
+            description: "Deposit",
             remarks: reference
           }
         }
       })
-    }, 10000);
+    });
 
     const data = await res.json();
 
-    console.log("PAYMONGO RESPONSE:", JSON.stringify(data));
+    console.log("PAYMONGO:", JSON.stringify(data));
 
-    // 🔥 HARD CHECK (NO CHECKOUT = FAIL)
     if (!data || !data.data || !data.data.attributes || !data.data.attributes.checkout_url) {
       return {
         statusCode: 500,
@@ -90,17 +92,22 @@ exports.handler = async (event) => {
 
     const checkout_url = data.data.attributes.checkout_url;
 
-    // 🔥 SAVE ONLY IF SUCCESS
-    await db.ref("transactions/" + reference).set({
-      userId,
-      amount,
-      reference,
-      checkout_url,
-      status: "PENDING",
-      createdAt: Date.now()
-    });
+    // 🔥 SAVE OPTIONAL (HINDI SISIRA KAHIT MAG-FAIL)
+    if (db) {
+      try {
+        await db.ref("transactions/" + reference).set({
+          userId,
+          amount,
+          reference,
+          status: "PENDING",
+          createdAt: Date.now()
+        });
+      } catch (e) {
+        console.error("FIREBASE SAVE FAILED:", e.message);
+      }
+    }
 
-    // 🔥 FINAL RESPONSE (DIRECT)
+    // 🔥 ALWAYS RETURN URL
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -110,13 +117,12 @@ exports.handler = async (event) => {
 
   } catch (err) {
 
-    console.error("ERROR:", err);
+    console.error("MAIN ERROR:", err);
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Server error",
-        message: err.message
+        error: err.message
       })
     };
   }
