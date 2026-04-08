@@ -103,10 +103,34 @@ body::before{
   z-index:9999;
 }
 
-.loading{
-  font-size:14px;
+.bottom-menu{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  margin:auto;
+  width:100%;
+  max-width:420px;
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  border-radius:20px 20px 0 0;
+  display:flex;
+  justify-content:space-around;
+  padding:12px 10px;
+  box-shadow:0 -5px 20px rgba(0,0,0,0.6);
+  z-index:99999;
+}
+
+.menu-item{
+  flex:1;
+  text-align:center;
   color:#aaa;
-  margin-top:30px;
+  font-size:11px;
+  cursor:pointer;
+}
+
+.menu-item.active{
+  color:#ffd700;
+  font-weight:bold;
 }
 </style>
 </head>
@@ -117,125 +141,82 @@ body::before{
 
 <div class="main-wrapper">
   <img src="LOGOClickCoin.png" class="logo">
-  <h3 id="wallet" class="glow">Loading...</h3>
+  <h3 id="wallet" class="glow">BALANCE ₱0</h3>
 
-  <div id="taskList" class="task-list">
-    <p class="loading">Loading tasks...</p>
-  </div>
+  <div id="taskList" class="task-list"></div>
 </div>
 
-<!-- 🔥 FIREBASE -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  setPersistence, 
-  browserLocalPersistence 
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-import { 
-  getDatabase, 
-  ref, 
-  onValue, 
-  get, 
-  update 
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-// ========================================
-// 🔥 CONFIG
-// ========================================
 const firebaseConfig = {
-  apiKey: "AIza...",
+  apiKey: "AIzaSyCMLY-oyKc2rKjOATw5Yplcr_MY1fVH3m4",
   authDomain: "clickcoin-81040.firebaseapp.com",
   databaseURL: "https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "clickcoin-81040",
+  storageBucket: "clickcoin-81040.appspot.com",
+  messagingSenderId: "227649837889",
+  appId: "1:227649837889:web:81ac51f2e358ed2231dfc0"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// ========================================
-// 🔥 FORCE LOGIN PERSISTENCE (FIX)
-// ========================================
-await setPersistence(auth, browserLocalPersistence);
-
-// ========================================
-// 🔥 FORMAT
-// ========================================
 function formatPHP(val){
   return "₱" + Number(val || 0).toLocaleString("en-PH");
 }
 
-// ========================================
-// 🔥 AUTH CHECK (FIXED)
-// ========================================
 onAuthStateChanged(auth, (user) => {
-
-  console.log("AUTH STATE:", user);
-
-  // 🔥 FIX: delay redirect para hindi false trigger
   if (!user) {
-    setTimeout(() => {
-      if (!auth.currentUser) {
-        location.href = "index.html";
-      }
-    }, 1500);
+    location.href = "index.html";
     return;
   }
 
   const uid = user.uid;
 
-  // ========================================
-  // 🔥 WALLET REALTIME
-  // ========================================
+  // ✅ REAL WALLET (SYNC)
   onValue(ref(db, 'users/' + uid), (snap)=>{
     const data = snap.val() || {};
     document.getElementById("wallet").innerText =
       "BALANCE " + formatPHP(data.wallet || 0);
   });
 
-  // ========================================
-  // 🔥 TASK UI
-  // ========================================
+  // ✅ REAL TASKS (NO FAKE COMPUTE)
   onValue(ref(db, 'investments/' + uid), (snap)=>{
     const container = document.getElementById("taskList");
     container.innerHTML = "";
 
     const tasks = snap.val();
+
     if (!tasks) {
-      container.innerHTML = `<p style="color:#aaa">No active tasks</p>`;
+      container.innerHTML = `
+        <p style="color:#aaa">
+          No active tasks<br><br>
+          👉 Go to HOME and BUY a task to start earning
+        </p>
+      `;
       return;
     }
 
     Object.keys(tasks).forEach(key => {
-      const t = tasks[key];
+      const task = tasks[key];
 
-      const now = Date.now();
-      const oneDay = 86400000;
+      const daily = task.dailyIncome || (task.price * 0.1);
+      const earned = task.totalEarned || 0;
 
-      const last = t.lastClaim || t.createdAt;
-      const diff = now - last;
-
-      const daily = t.dailyIncome || (t.price * 0.1);
-
-      const dbEarned = t.totalEarned || 0;
-
-      const liveDays = diff / oneDay;
-      const liveEarn = daily * liveDays;
-
-      const totalEarn = dbEarned + liveEarn;
-
-      const max = daily * (t.durationDays || 30);
-      const percent = Math.min((totalEarn / max) * 100, 100);
+      const max = daily * (task.durationDays || 30);
+      const percent = Math.min((earned / max) * 100, 100);
 
       container.innerHTML += `
         <div class="card">
           <img src="LOGOClickCoin.png">
           <div class="card-info">
-            <h3>${t.name || "Investment"}</h3>
+            <h3>${task.name || "Investment"}</h3>
             <p>Daily: ${formatPHP(daily)}</p>
-            <p>Earned: ${formatPHP(totalEarn)}</p>
+            <p>Earned: ${formatPHP(earned)}</p>
             <p>Total: ${formatPHP(max)}</p>
             <p>Progress: ${Math.floor(percent)}%</p>
 
@@ -248,55 +229,11 @@ onAuthStateChanged(auth, (user) => {
     });
   });
 
-  // ========================================
-  // 🔥 AUTO CLAIM
-  // ========================================
-  setInterval(async () => {
-
-    const snap = await get(ref(db,'investments/'+uid));
-    const tasks = snap.val();
-    if(!tasks) return;
-
-    let totalClaim = 0;
-    const updates = {};
-
-    Object.keys(tasks).forEach(key=>{
-      const t = tasks[key];
-
-      const now = Date.now();
-      const last = t.lastClaim || t.createdAt;
-
-      const diff = now - last;
-      const oneDay = 86400000;
-
-      if(diff < oneDay) return;
-
-      const days = Math.floor(diff / oneDay);
-      const daily = t.dailyIncome || (t.price * 0.1);
-
-      const earn = daily * days;
-
-      totalClaim += earn;
-
-      updates['investments/'+uid+'/'+key+'/lastClaim'] = now;
-      updates['investments/'+uid+'/'+key+'/totalEarned'] =
-        (t.totalEarned || 0) + earn;
-    });
-
-    if(totalClaim > 0){
-
-      const userSnap = await get(ref(db,'users/'+uid));
-      const userData = userSnap.val() || {};
-
-      updates['users/'+uid+'/wallet'] =
-        (userData.wallet || 0) + totalClaim;
-
-      await update(ref(db), updates);
-    }
-
-  }, 5000);
-
 });
+
+window.goBack = function(){
+  location.href="home.html";
+};
 </script>
 
 <script src="support.js"></script>

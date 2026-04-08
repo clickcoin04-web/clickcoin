@@ -136,8 +136,6 @@ margin-top:10px;
 <div class="modal-box" id="modalContent"></div>
 </div>
 
-<!-- SAME HTML & STYLE MO — WALANG BINAGO -->
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, update, remove, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -148,30 +146,23 @@ databaseURL:"https://clickcoin-81040-default-rtdb.asia-southeast1.firebasedataba
 });
 const db = getDatabase(app);
 
-// ================= GLOBAL SAFE UPDATE =================
+// SAFE UPDATE
 async function safeUpdate(path, data){
 try{
 await update(ref(db), data);
 }catch(e){
-console.error("UPDATE ERROR:", e);
 alert("Database error");
 }
 }
 
-// ================= LOGGER =================
+// LOGS
 async function logAdmin(action, data){
-try{
 await push(ref(db,"admin_logs"),{
-action,
-data,
-time:Date.now()
+action,data,time:Date.now()
 });
-}catch(e){
-console.error("LOG FAIL:",e);
-}
 }
 
-// ================= USERS =================
+// USERS
 let USERS_CACHE = {};
 
 onValue(ref(db,"users"), snap=>{
@@ -186,9 +177,12 @@ Object.entries(USERS_CACHE).forEach(([id,u])=>{
 html+=`
 <div class="card">
 <b onclick="viewUser('${id}')">${u.username||"N/A"}</b><br>
-📱 ${u.phone || "No number"}<br>
-💰 ₱${u.wallet||0}<br>
-📊 Deposit: ₱${u.totalDeposit||0}
+
+📱 FULL NUMBER: ${u.phone || "NO NUMBER"}<br>
+
+💰 Wallet: ₱${u.wallet||0}<br>
+💵 Earnings: ₱${u.earningsBalance||0}<br>
+🔒 Deposit Locked: ₱${u.depositBalance||0}<br>
 
 <button class="delete" onclick="deleteUser('${id}')">Delete</button>
 <button class="edit" onclick="editBalance('${id}')">Edit</button>
@@ -201,7 +195,7 @@ document.getElementById("users").innerHTML=html;
 computeStats(USERS_CACHE);
 });
 
-// ================= DELETE =================
+// DELETE
 window.deleteUser=async id=>{
 if(confirm("Delete user?")){
 await remove(ref(db,"users/"+id));
@@ -209,14 +203,12 @@ await logAdmin("DELETE_USER",{id});
 }
 };
 
-// ================= BALANCE =================
-
-// SET
+// EDIT BALANCE
 window.editBalance=id=>{
 const u=USERS_CACHE[id];
 
 modalContent.innerHTML=`
-<h3>Edit Balance</h3>
+<h3>Edit Wallet</h3>
 <input id="newBal" value="${u.wallet||0}">
 <button onclick="saveBalance('${id}')">Save</button>
 `;
@@ -224,7 +216,7 @@ modal.style.display="flex";
 };
 
 window.saveBalance=async id=>{
-const val=parseFloat(document.getElementById("newBal").value)||0;
+const val=parseFloat(newBal.value)||0;
 
 await safeUpdate("/",{
 ['users/'+id+'/wallet']: val
@@ -234,51 +226,53 @@ await logAdmin("SET_BALANCE",{id,val});
 modal.style.display="none";
 };
 
-// ADD (SAFE FETCH LATEST)
+// ADD
 window.addBalance=id=>{
 modalContent.innerHTML=`
-<h3>Add Balance</h3>
-<input id="amount" placeholder="Amount">
+<h3>Add Earnings</h3>
+<input id="amount">
 <button onclick="confirmAdd('${id}')">Confirm</button>
 `;
 modal.style.display="flex";
 };
 
 window.confirmAdd=async id=>{
-const amt=parseFloat(document.getElementById("amount").value)||0;
+const amt=parseFloat(amount.value)||0;
 
 const snap = await get(ref(db,"users/"+id));
 const u = snap.val() || {};
 
 await safeUpdate("/",{
-['users/'+id+'/wallet']: (u.wallet||0)+amt
+['users/'+id+'/wallet']: (u.wallet||0)+amt,
+['users/'+id+'/earningsBalance']: (u.earningsBalance||0)+amt
 });
 
-await logAdmin("ADD_BALANCE",{id,amt});
+await logAdmin("ADD_EARNINGS",{id,amt});
 modal.style.display="none";
 };
 
 // MINUS
 window.minusBalance=id=>{
 modalContent.innerHTML=`
-<h3>Deduct Balance</h3>
-<input id="amount" placeholder="Amount">
+<h3>Deduct Earnings</h3>
+<input id="amount">
 <button onclick="confirmMinus('${id}')">Confirm</button>
 `;
 modal.style.display="flex";
 };
 
 window.confirmMinus=async id=>{
-const amt=parseFloat(document.getElementById("amount").value)||0;
+const amt=parseFloat(amount.value)||0;
 
 const snap = await get(ref(db,"users/"+id));
 const u = snap.val() || {};
 
 await safeUpdate("/",{
-['users/'+id+'/wallet']: (u.wallet||0)-amt
+['users/'+id+'/wallet']: (u.wallet||0)-amt,
+['users/'+id+'/earningsBalance']: (u.earningsBalance||0)-amt
 });
 
-await logAdmin("DEDUCT_BALANCE",{id,amt});
+await logAdmin("DEDUCT_EARNINGS",{id,amt});
 modal.style.display="none";
 };
 
@@ -290,14 +284,14 @@ modalContent.innerHTML=`
 <h3>${u.username}</h3>
 📱 ${u.phone}<br>
 💰 ₱${u.wallet}<br>
-📊 ₱${u.totalDeposit||0}<br>
-🎯 Ref: ${u.referrer||"none"}<br>
+💵 ₱${u.earningsBalance||0}<br>
+🔒 ₱${u.depositBalance||0}<br>
 <button onclick="modal.style.display='none'">Close</button>
 `;
 modal.style.display="flex";
 };
 
-// ================= DEPOSITS (FIXED) =================
+// DEPOSITS
 onValue(ref(db,"transactions"), snap=>{
 let html="";
 
@@ -306,29 +300,25 @@ const d=c.val(),id=c.key;
 
 html+=`
 <div class="card">
-<b>${id}</b><br>
+${id}<br>
 User: ${d.userId}<br>
 ₱${d.amount}<br>
-Status: ${d.status}
-<button class="approve" onclick="forceApprove('${id}')">Force Approve</button>
+${d.status}
+<button class="approve" onclick="forceApprove('${id}')">Approve</button>
 </div>`;
 });
 
-document.getElementById("deposit").innerHTML=html;
+deposit.innerHTML=html;
 });
 
-// 🔥 FIX: NO DOUBLE CREDIT
+// APPROVE DEPOSIT
 window.forceApprove=async id=>{
 const snap=await get(ref(db,"transactions/"+id));
 const d=snap.val();
 
-if(!d){
-alert("No transaction");
-return;
-}
+if(!d) return;
 
-// ❌ already processed
-if(d.status === "COMPLETED"){
+if(d.status==="COMPLETED"){
 alert("Already approved");
 return;
 }
@@ -337,17 +327,17 @@ const userSnap = await get(ref(db,"users/"+d.userId));
 const u = userSnap.val() || {};
 
 await safeUpdate("/",{
+['users/'+d.userId+'/depositBalance']: (u.depositBalance||0)+d.amount,
 ['users/'+d.userId+'/wallet']: (u.wallet||0)+d.amount,
-['transactions/'+id+'/status']: "COMPLETED",
-['transactions/'+id+'/manual']: true
+['transactions/'+id+'/status']: "COMPLETED"
 });
 
-await logAdmin("FORCE_DEPOSIT",d);
-alert("Deposit approved");
+await logAdmin("DEPOSIT_APPROVED",d);
+alert("Deposit OK");
 };
 
-// ================= WITHDRAW =================
-onValue(ref(db,"withdrawals"), snap=>{
+// WITHDRAW
+onValue(ref(db,"withdrawals"), async snap=>{
 let html="";
 let list=[];
 
@@ -357,61 +347,75 @@ val.id=c.key;
 list.push(val);
 });
 
+// sort latest
 list.sort((a,b)=>b.time-a.time);
 
-list.forEach(w=>{
-const user=USERS_CACHE[w.uid]||{};
+// 🔥 IMPORTANT: fetch user per withdraw
+for(const w of list){
+
+let phone = "LOADING...";
+
+try{
+const userSnap = await get(ref(db,"users/"+w.uid));
+const userData = userSnap.val() || {};
+
+phone = userData.phone || "NO NUMBER";
+}catch(e){
+phone = "ERROR";
+}
 
 html+=`
 <div class="card">
 ${w.username}<br>
-📱 ${user.phone}<br>
+
+📱 FULL NUMBER: ${phone}<br>
+
 💰 ₱${w.amount}<br>
 ${w.status}
+
 <button class="approve" onclick="approveWithdraw('${w.id}')">Approve</button>
 <button class="reject" onclick="rejectWithdraw('${w.id}')">Reject</button>
 </div>`;
-});
+}
 
 document.getElementById("withdraw").innerHTML=html;
 });
 
-// 🔥 FIX: optional deduct (if not yet deducted)
+// APPROVE WITHDRAW (SAFE)
 window.approveWithdraw=async id=>{
-await update(ref(db,"withdrawals/"+id),{status:"APPROVED"});
-await logAdmin("APPROVE_WITHDRAW",{id});
+const snap = await get(ref(db,"withdrawals/"+id));
+const w = snap.val();
+
+if(!w) return;
+
+if(w.status==="APPROVED"){
+alert("Already processed");
+return;
+}
+
+const userSnap = await get(ref(db,"users/"+w.uid));
+const u = userSnap.val() || {};
+
+if((u.earningsBalance||0) < w.amount){
+alert("Not enough earnings");
+return;
+}
+
+await safeUpdate("/",{
+['users/'+w.uid+'/earningsBalance']: (u.earningsBalance||0)-w.amount,
+['users/'+w.uid+'/wallet']: (u.wallet||0)-w.amount,
+['withdrawals/'+id+'/status']: "APPROVED"
+});
+
+alert("SEND TO: "+u.phone);
 };
 
+// REJECT
 window.rejectWithdraw=async id=>{
 await update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
-await logAdmin("REJECT_WITHDRAW",{id});
 };
 
-// ================= ADMIN LOGS =================
-onValue(ref(db,"admin_logs"), snap=>{
-let logs=[];
-
-snap.forEach(c=>{
-logs.push(c.val());
-});
-
-logs.sort((a,b)=>b.time-a.time);
-
-let html="<h3>Admin Logs</h3>";
-
-logs.slice(0,20).forEach(l=>{
-html+=`
-<div class="card">
-${l.action}<br>
-${JSON.stringify(l.data)}<br>
-🕒 ${new Date(l.time).toLocaleString()}
-</div>`;
-});
-
-document.getElementById("stats").innerHTML=html;
-});
-
-// ================= STATS =================
+// STATS
 let chart;
 function computeStats(users){
 let count=Object.keys(users).length;
@@ -427,7 +431,7 @@ datasets:[{label:"Total Users",data:[count]}]
 });
 }
 
-// ================= UI =================
+// UI
 window.show=id=>{
 document.querySelectorAll(".section").forEach(s=>s.style.display="none");
 document.getElementById(id).style.display="block";
