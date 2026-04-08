@@ -2,9 +2,9 @@ const fetch = require("node-fetch");
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 
-// ========================================
-// 🔥 INIT FIREBASE (SAFE)
-// ========================================
+// ==========================
+// 🔥 INIT FIREBASE
+// ==========================
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
@@ -14,10 +14,10 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
-// ========================================
+// ==========================
 // 🔥 LOGGER
-// ========================================
-async function logDebug(step, data) {
+// ==========================
+async function log(step, data) {
   try {
     const id = Date.now() + "_" + Math.random().toString(16).slice(2);
 
@@ -26,182 +26,156 @@ async function logDebug(step, data) {
       data,
       time: new Date().toISOString()
     });
-  } catch (e) {
-    console.error("LOG FAIL:", e.message);
-  }
+  } catch (e) {}
 }
 
-// ========================================
-// 🔥 VERIFY PAYMENT (WITH RETRY)
-// ========================================
+// ==========================
+// 🔐 SIGNATURE VERIFY (STRICT)
+// ==========================
+function verifySignature(rawBody, signature, secret) {
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  return signature === expected; // 🔥 exact match only
+}
+
+// ==========================
+// 🔍 VERIFY PAYMENT
+// ==========================
 async function verifyPayment(paymentId, secret) {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const res = await fetch(`https://api.paymongo.com/v1/payments/${paymentId}`, {
-        headers: {
-          Authorization: "Basic " + Buffer.from(secret + ":").toString("base64"),
-        }
-      });
-
-      const data = await res.json();
-
-      if (data?.data?.attributes?.status === "paid") {
-        return data;
+  try {
+    const res = await fetch(`https://api.paymongo.com/v1/payments/${paymentId}`, {
+      headers: {
+        Authorization: "Basic " + Buffer.from(secret + ":").toString("base64"),
       }
+    });
 
-      await new Promise(r => setTimeout(r, 1500));
+    const data = await res.json();
 
-    } catch (e) {
-      await new Promise(r => setTimeout(r, 1500));
+    if (data?.data?.attributes?.status === "paid") {
+      return data;
     }
-  }
 
-  return null;
+    return null;
+
+  } catch {
+    return null;
+  }
 }
 
-// ========================================
-// 🚀 MAIN HANDLER
-// ========================================
+// ==========================
+// 🚀 MAIN
+// ==========================
 exports.handler = async (event) => {
 
   if (event.httpMethod !== "POST") {
-    return { statusCode: 200, body: "ok" };
+    return { statusCode: 200 };
   }
 
   try {
-    const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
-    const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
 
     const rawBody = event.body;
 
-    await logDebug("STEP_1_RECEIVED", rawBody);
+    const PAYMONGO_SECRET = process.env.PAYMONGO_SECRET;
+    const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET;
 
-    // ========================================
-    // 🔐 SIGNATURE VERIFY
-    // ========================================
     const signature = event.headers["paymongo-signature"];
 
-    if (WEBHOOK_SECRET && signature) {
-      const expectedSignature = crypto
-        .createHmac("sha256", WEBHOOK_SECRET)
-        .update(rawBody)
-        .digest("hex");
+    await log("STEP_1_RECEIVED", rawBody);
 
-      if (!signature.includes(expectedSignature)) {
-        await logDebug("ERROR_INVALID_SIGNATURE", { signature, expectedSignature });
-        return { statusCode: 400 };
-      }
+    // ==========================
+    // 🔐 STRICT SIGNATURE
+    // ==========================
+    if (!verifySignature(rawBody, signature, WEBHOOK_SECRET)) {
+      await log("INVALID_SIGNATURE", signature);
+      return { statusCode: 400 };
     }
-
-    await logDebug("STEP_2_SIGNATURE_OK", signature);
 
     const body = JSON.parse(rawBody);
     const data = body.data;
 
-    if (!data) {
-      await logDebug("ERROR_NO_DATA", body);
+    const eventType = data?.attributes?.type;
+
+    await log("STEP_2_EVENT", eventType);
+
+    // 🔥 ONLY ACCEPT PAID
+    if (eventType !== "payment.paid") {
       return { statusCode: 200 };
     }
 
-    const eventType = data.attributes.type;
-
-    await logDebug("STEP_3_EVENT_TYPE", eventType);
-
-    // ========================================
-    // 🔥 HANDLE EVENTS
-    // ========================================
-    if (eventType !== "payment.paid" && eventType !== "source.chargeable") {
-      await logDebug("IGNORED_EVENT", eventType);
-      return { statusCode: 200 };
-    }
-
-    // ========================================
-    // 🔥 GET PAYMENT ID (SAFE)
-    // ========================================
-    const paymentId =
-      data.attributes?.data?.id ||
-      data.attributes?.payment_id ||
-      data.id;
+    const paymentId = data?.attributes?.data?.id;
 
     if (!paymentId) {
-      await logDebug("ERROR_NO_PAYMENT_ID", data);
+      await log("NO_PAYMENT_ID", data);
       return { statusCode: 200 };
     }
 
-    await logDebug("STEP_4_PAYMENT_ID", paymentId);
-
-    // ========================================
-    // 🔥 VERIFY FROM PAYMONGO
-    // ========================================
+    // ==========================
+    // 🔍 VERIFY FROM PAYMONGO
+    // ==========================
     const verifyData = await verifyPayment(paymentId, PAYMONGO_SECRET);
 
-    await logDebug("STEP_5_VERIFY_RESPONSE", verifyData);
-
     if (!verifyData) {
-      await logDebug("ERROR_VERIFY_FAILED", paymentId);
+      await log("VERIFY_FAILED", paymentId);
       return { statusCode: 200 };
     }
 
-    const attributes = verifyData.data.attributes;
+    const attr = verifyData.data.attributes;
 
-    const reference =
-      attributes.remarks ||
-      attributes.metadata?.reference;
-
-    const amount = attributes.amount / 100;
-
-    await logDebug("STEP_6_PAYMENT_DATA", { reference, amount });
+    const reference = attr.remarks || attr.metadata?.reference;
+    const amount = attr.amount / 100;
 
     if (!reference) {
-      await logDebug("ERROR_NO_REFERENCE", attributes);
+      await log("NO_REFERENCE", attr);
       return { statusCode: 200 };
     }
 
-    // ========================================
-    // 🔎 FETCH TRANSACTION
-    // ========================================
-    const snap = await db.ref("transactions/" + reference).once("value");
+    // ==========================
+    // 🔒 IDEMPOTENCY LOCK
+    // ==========================
+    const trxRef = db.ref("transactions/" + reference);
 
-    if (!snap.exists()) {
-      await logDebug("ERROR_TRANSACTION_NOT_FOUND", reference);
+    const trxSnap = await trxRef.once("value");
+
+    if (!trxSnap.exists()) {
+      await log("TRX_NOT_FOUND", reference);
       return { statusCode: 200 };
     }
 
-    const trx = snap.val();
-
-    await logDebug("STEP_7_TRANSACTION_FOUND", trx);
-
-    // ========================================
-    // 🔒 VALIDATION
-    // ========================================
-    if (Number(trx.amount) !== Number(amount)) {
-      await logDebug("ERROR_AMOUNT_MISMATCH", {
-        expected: trx.amount,
-        actual: amount
-      });
-      return { statusCode: 200 };
-    }
+    const trx = trxSnap.val();
 
     if (trx.status === "COMPLETED") {
-      await logDebug("ALREADY_PROCESSED", reference);
+      await log("ALREADY_DONE", reference);
       return { statusCode: 200 };
     }
 
-    // ========================================
-    // ✅ COMPLETE TRANSACTION
-    // ========================================
-    await db.ref("transactions/" + reference).update({
-      status: "COMPLETED",
-      paidAt: Date.now(),
-      paymentId
+    if (Number(trx.amount) !== Number(amount)) {
+      await log("AMOUNT_MISMATCH", { trx: trx.amount, amount });
+      return { statusCode: 200 };
+    }
+
+    // ==========================
+    // 🔥 ATOMIC PROCESS (CRITICAL)
+    // ==========================
+    const processRef = db.ref("processing/" + reference);
+
+    const lock = await processRef.transaction(current => {
+      if (current) return; // already processing
+      return { started: Date.now() };
     });
 
-    await logDebug("STEP_8_MARK_COMPLETED", reference);
+    if (!lock.committed) {
+      await log("LOCKED_ALREADY", reference);
+      return { statusCode: 200 };
+    }
 
-    // ========================================
-    // 💰 WALLET + INVESTMENT
-    // ========================================
+    // ==========================
+    // 💰 WALLET UPDATE
+    // ==========================
     await db.ref("users/" + trx.userId).transaction(user => {
+
       if (!user) return user;
 
       const now = Date.now();
@@ -224,17 +198,21 @@ exports.handler = async (event) => {
       return user;
     });
 
-    await logDebug("STEP_9_WALLET_UPDATED", {
-      userId: trx.userId,
-      amount
+    // ==========================
+    // ✅ MARK COMPLETE
+    // ==========================
+    await trxRef.update({
+      status: "COMPLETED",
+      paidAt: Date.now(),
+      paymentId
     });
 
-    // ========================================
-    // 🎯 REFERRAL SYSTEM
-    // ========================================
-    await handleReferral(trx.userId, amount);
+    await log("PAYMENT_SUCCESS", reference);
 
-    await logDebug("STEP_10_REFERRAL_DONE", trx.userId);
+    // ==========================
+    // 🎯 REFERRAL
+    // ==========================
+    await handleReferral(trx.userId, amount);
 
     return {
       statusCode: 200,
@@ -242,64 +220,45 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-
-    await logDebug("FATAL_ERROR", err.message);
-
-    return {
-      statusCode: 500,
-      body: "ERROR"
-    };
+    await log("FATAL", err.message);
+    return { statusCode: 500 };
   }
 };
 
-// ========================================
-// 💸 REFERRAL SYSTEM
-// ========================================
+// ==========================
+// 💸 REFERRAL (SAFE)
+// ==========================
 async function handleReferral(userId, amount) {
   try {
+
     const userSnap = await db.ref("users/" + userId).once("value");
     const user = userSnap.val();
 
     if (!user || !user.referrer) return;
 
-    const lvl1 = user.referrer;
-    const lvl1Commission = amount * 0.15;
+    const levels = [
+      { uid: user.referrer, percent: 0.15 },
+      { percent: 0.05 },
+      { percent: 0.02 }
+    ];
 
-    await db.ref("users/" + lvl1).transaction(u => {
-      if (!u) return u;
-      u.wallet = (u.wallet || 0) + lvl1Commission;
-      return u;
-    });
+    let current = user.referrer;
 
-    const lvl1Snap = await db.ref("users/" + lvl1).once("value");
-    const lvl1Data = lvl1Snap.val();
+    for (let i = 0; i < levels.length; i++) {
 
-    if (lvl1Data?.referrer) {
-      const lvl2 = lvl1Data.referrer;
-      const lvl2Commission = amount * 0.05;
+      if (!current) break;
 
-      await db.ref("users/" + lvl2).transaction(u => {
+      const commission = amount * levels[i].percent;
+
+      await db.ref("users/" + current).transaction(u => {
         if (!u) return u;
-        u.wallet = (u.wallet || 0) + lvl2Commission;
+        u.wallet = (u.wallet || 0) + commission;
         return u;
       });
 
-      const lvl2Snap = await db.ref("users/" + lvl2).once("value");
-      const lvl2Data = lvl2Snap.val();
-
-      if (lvl2Data?.referrer) {
-        const lvl3 = lvl2Data.referrer;
-        const lvl3Commission = amount * 0.02;
-
-        await db.ref("users/" + lvl3).transaction(u => {
-          if (!u) return u;
-          u.wallet = (u.wallet || 0) + lvl3Commission;
-          return u;
-        });
-      }
+      const snap = await db.ref("users/" + current).once("value");
+      current = snap.val()?.referrer;
     }
 
-  } catch (err) {
-    await logDebug("REFERRAL_ERROR", err.message);
-  }
+  } catch {}
 }
