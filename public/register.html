@@ -264,15 +264,26 @@ window.register = async function () {
 
     // SAVE USER
     await set(ref(db, "users/" + uid), {
-      username: "User" + mobile.slice(-4),
-      mobile: mobile,
-      wallet: 0,
-      myInviteCode: inviteCode,
-      referredBy: refCode || null,
-      createdAt: Date.now(),
-      totalDeposit: 0,
-      commissionEarned: 0
-    });
+  username: "User" + mobile.slice(-4),
+
+  // 🔥 IMPORTANT (PARA SA ADMIN)
+  phone: mobile,
+  withdrawNumber: mobile,
+
+  // 🔥 KEEP MO PARA SAFE
+  mobile: mobile,
+
+  wallet: 0,
+  totalEarnings: 0,
+  depositBalance: 0,
+
+  myInviteCode: inviteCode,
+  referredBy: refCode || null,
+
+  createdAt: Date.now(),
+  totalDeposit: 0,
+  commissionEarned: 0
+});
 
     // SAVE INVITE OWNER
     await set(ref(db, "invites/" + inviteCode), {

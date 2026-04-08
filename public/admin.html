@@ -185,7 +185,7 @@ onValue(ref(db, "users"), snap => {
 
       🆔 UID: ${id}<br>
 
-      📱 FULL NUMBER: ${u.phone ? u.phone : "NO NUMBER"}<br>
+      📱 FULL NUMBER: ${u.phone || u.mobile || "NO NUMBER"}<br>
 
       💳 WITHDRAW NUMBER: ${u.withdrawNumber ? u.withdrawNumber : "NOT SET"}<br>
 
