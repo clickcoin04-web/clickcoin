@@ -218,7 +218,103 @@ modalContent.innerHTML=`
 modal.style.display="flex";
 };
 
-// ================= WITHDRAW (FIXED NUMBER) =================
+// BALANCE EDIT
+window.editBalance=id=>{
+const u=USERS_CACHE[id];
+modalContent.innerHTML=`
+<h3>Edit Wallet</h3>
+<input id="newBal" value="${u.wallet||0}">
+<button onclick="saveBalance('${id}')">Save</button>
+`;
+modal.style.display="flex";
+};
+
+window.saveBalance=async id=>{
+const val=parseFloat(newBal.value)||0;
+await safeUpdate("/",{
+['users/'+id+'/wallet']:val
+});
+modal.style.display="none";
+};
+
+// ADD
+window.addBalance=id=>{
+modalContent.innerHTML=`
+<h3>Add Earnings</h3>
+<input id="amount">
+<button onclick="confirmAdd('${id}')">Confirm</button>
+`;
+modal.style.display="flex";
+};
+
+window.confirmAdd=async id=>{
+const amt=parseFloat(amount.value)||0;
+const snap=await get(ref(db,"users/"+id));
+const u=snap.val()||{};
+await safeUpdate("/",{
+['users/'+id+'/wallet']:(u.wallet||0)+amt,
+['users/'+id+'/earningsBalance']:(u.earningsBalance||0)+amt
+});
+modal.style.display="none";
+};
+
+// MINUS
+window.minusBalance=id=>{
+modalContent.innerHTML=`
+<h3>Deduct Earnings</h3>
+<input id="amount">
+<button onclick="confirmMinus('${id}')">Confirm</button>
+`;
+modal.style.display="flex";
+};
+
+window.confirmMinus=async id=>{
+const amt=parseFloat(amount.value)||0;
+const snap=await get(ref(db,"users/"+id));
+const u=snap.val()||{};
+await safeUpdate("/",{
+['users/'+id+'/wallet']:(u.wallet||0)-amt,
+['users/'+id+'/earningsBalance']:(u.earningsBalance||0)-amt
+});
+modal.style.display="none";
+};
+
+// DEPOSITS
+onValue(ref(db,"transactions"), snap=>{
+let html="";
+snap.forEach(c=>{
+const d=c.val(),id=c.key;
+html+=`
+<div class="card">
+${id}<br>
+User: ${d.userId}<br>
+₱${d.amount}<br>
+${d.status}
+<button class="approve" onclick="forceApprove('${id}')">Approve</button>
+</div>`;
+});
+deposit.innerHTML=html;
+});
+
+// APPROVE DEPOSIT
+window.forceApprove=async id=>{
+const snap=await get(ref(db,"transactions/"+id));
+const d=snap.val();
+
+if(!d) return;
+if(d.status==="COMPLETED"){alert("Already");return;}
+
+const userSnap=await get(ref(db,"users/"+d.userId));
+const u=userSnap.val()||{};
+
+await safeUpdate("/",{
+['users/'+d.userId+'/depositBalance']:(u.depositBalance||0)+d.amount,
+['users/'+d.userId+'/wallet']:(u.wallet||0)+d.amount,
+['transactions/'+id+'/status']:"COMPLETED"
+});
+};
+
+// ================= WITHDRAW (FINAL FIX) =================
 onValue(ref(db,"withdrawals"), async snap=>{
 let html="";
 let list=[];
@@ -233,8 +329,14 @@ list.sort((a,b)=>b.time-a.time);
 
 for(const w of list){
 
-let phone = w.withdrawNumber || w.phone || "";
+let phone = w.phone || "";
 
+// 🔥 ADD: kunin muna withdrawNumber (user input)
+if(w.withdrawNumber){
+phone = w.withdrawNumber;
+}
+
+// 🔥 fallback pa rin (existing logic mo)
 if(!phone){
 try{
 const userSnap = await get(ref(db,"users/"+w.uid));
@@ -249,7 +351,7 @@ html+=`
 <div class="card">
 <b>${w.username}</b><br>
 
-📱 ${phone}<br>
+📱 FULL NUMBER: ${phone}<br>
 
 💰 ₱${w.amount}<br>
 Status: ${w.status}
@@ -269,8 +371,18 @@ const w=snap.val();
 
 if(!w) return;
 
+if(w.status==="APPROVED"){
+alert("Already processed");
+return;
+}
+
 const userSnap=await get(ref(db,"users/"+w.uid));
 const u=userSnap.val()||{};
+
+if((u.earningsBalance||0) < w.amount){
+alert("Not enough earnings");
+return;
+}
 
 await safeUpdate("/",{
 ['users/'+w.uid+'/earningsBalance']:(u.earningsBalance||0)-w.amount,
@@ -278,7 +390,7 @@ await safeUpdate("/",{
 ['withdrawals/'+id+'/status']:"APPROVED"
 });
 
-alert("SEND TO: "+(w.withdrawNumber||u.phone||"NO NUMBER"));
+alert("SEND MONEY TO: "+(w.withdrawNumber||w.phone||u.phone||"NO NUMBER"));
 };
 
 // REJECT
@@ -286,13 +398,43 @@ window.rejectWithdraw=async id=>{
 await update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
 };
 
+// STATS
+let chart;
+function computeStats(users){
+let count=Object.keys(users).length;
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:"bar",
+data:{labels:["Users"],datasets:[{label:"Total Users",data:[count]}]}
+});
+}
+
 // UI
 window.show=id=>{
 document.querySelectorAll(".section").forEach(s=>s.style.display="none");
 document.getElementById(id).style.display="block";
 };
 
-window.onload=()=>show("users");
+window.logout=()=>{
+localStorage.clear();
+location="index.html";
+};
+
+window.copyInvite=()=>{
+navigator.clipboard.writeText(inviteLink.value);
+alert("Copied");
+};
+
+function generateInvite(){
+const code="ADMIN"+Math.floor(Math.random()*9999);
+inviteCode.value=code;
+inviteLink.value=location.origin+"/register.html?ref="+code;
+}
+
+window.onload=()=>{
+generateInvite();
+show("users");
+};
 </script>
 
 </body>
