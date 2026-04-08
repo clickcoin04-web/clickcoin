@@ -163,37 +163,56 @@ action,data,time:Date.now()
 });
 }
 
-// USERS
+// ================= USERS REALTIME =================
 let USERS_CACHE = {};
 
-onValue(ref(db,"users"), snap=>{
-let html="";
-USERS_CACHE={};
+onValue(ref(db, "users"), snap => {
+  let html = "";
+  USERS_CACHE = {};
 
-snap.forEach(c=>{
-USERS_CACHE[c.key]=c.val();
-});
+  snap.forEach(c => {
+    USERS_CACHE[c.key] = c.val();
+  });
 
-Object.entries(USERS_CACHE).forEach(([id,u])=>{
-html+=`
-<div class="card">
-<b onclick="viewUser('${id}')">${u.username||"N/A"}</b><br>
+  Object.entries(USERS_CACHE).forEach(([id, u]) => {
 
-📱 FULL NUMBER: ${u.phone||"NO NUMBER"}<br>
+    html += `
+    <div class="card">
 
-💰 Wallet: ₱${u.wallet||0}<br>
-💵 Earnings: ₱${u.earningsBalance||0}<br>
-🔒 Deposit Locked: ₱${u.depositBalance||0}<br>
+      <b onclick="viewUser('${id}')">
+        ${u.username || "N/A"}
+      </b><br>
 
-<button class="delete" onclick="deleteUser('${id}')">Delete</button>
-<button class="edit" onclick="editBalance('${id}')">Edit</button>
-<button class="edit" onclick="addBalance('${id}')">+ Add</button>
-<button class="edit" onclick="minusBalance('${id}')">- Deduct</button>
-</div>`;
-});
+      🆔 UID: ${id}<br>
 
-users.innerHTML=html;
-computeStats(USERS_CACHE);
+      📱 FULL NUMBER: ${u.phone ? u.phone : "NO NUMBER"}<br>
+
+      💳 WITHDRAW NUMBER: ${u.withdrawNumber ? u.withdrawNumber : "NOT SET"}<br>
+
+      💰 Wallet: ₱${Number(u.wallet || 0).toLocaleString("en-PH")}<br>
+
+      💵 Earnings: ₱${Number(u.totalEarnings || 0).toLocaleString("en-PH")}<br>
+
+      🔒 Deposit Locked: ₱${Number(u.depositBalance || 0).toLocaleString("en-PH")}<br>
+
+      <br>
+
+      <button class="delete" onclick="deleteUser('${id}')">Delete</button>
+
+      <button class="edit" onclick="editBalance('${id}')">Edit</button>
+
+      <button class="edit" onclick="addBalance('${id}')">+ Add</button>
+
+      <button class="edit" onclick="minusBalance('${id}')">- Deduct</button>
+
+    </div>
+    `;
+  });
+
+  users.innerHTML = html;
+
+  // 🔥 stats (wallet total, etc.)
+  computeStats(USERS_CACHE);
 });
 
 // DELETE
@@ -353,7 +372,9 @@ html+=`
 
 📱 FULL NUMBER: ${phone}<br>
 
-💰 ₱${w.amount}<br>
+💰 Amount: ₱${w.amount}<br>
+💸 Fee (10%): ₱${(w.amount * 0.10).toFixed(2)}<br>
+✅ Total Deduct: ₱${(w.amount * 1.10).toFixed(2)}<br>
 Status: ${w.status}
 
 <button class="approve" onclick="approveWithdraw('${w.id}')">Approve</button>
@@ -374,20 +395,27 @@ if(!w) return;
 if(w.status==="APPROVED"){
 alert("Already processed");
 return;
+const fee = w.amount * 0.10;
+const total = w.amount + fee;
 }
 
 const userSnap=await get(ref(db,"users/"+w.uid));
 const u=userSnap.val()||{};
 
-if((u.earningsBalance||0) < w.amount){
+if((u.earningsBalance||0) < total){
 alert("Not enough earnings");
 return;
 }
 
+const fee = w.amount * 0.10;
+const total = w.amount + fee;
+
 await safeUpdate("/",{
-['users/'+w.uid+'/earningsBalance']:(u.earningsBalance||0)-w.amount,
-['users/'+w.uid+'/wallet']:(u.wallet||0)-w.amount,
-['withdrawals/'+id+'/status']:"APPROVED"
+['users/'+w.uid+'/earningsBalance']:(u.earningsBalance||0)-total,
+['users/'+w.uid+'/wallet']:(u.wallet||0)-total,
+['withdrawals/'+id+'/status']:"APPROVED",
+['withdrawals/'+id+'/fee']:fee,
+['withdrawals/'+id+'/totalDeduct']:total
 });
 
 alert("SEND MONEY TO: "+(w.withdrawNumber||w.phone||u.phone||"NO NUMBER"));

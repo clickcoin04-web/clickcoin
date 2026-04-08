@@ -67,10 +67,13 @@ body::before{
   padding:10px;
   display:flex;
   gap:10px;
+  align-items:center;
 }
 
 .card img{
-  width:60px;
+  width:70px;
+  height:70px;
+  object-fit:cover; /* 🔥 FIX IMAGE FIT */
   border-radius:10px;
 }
 
@@ -181,49 +184,57 @@ onAuthStateChanged(auth, async (user) => {
 
   // ✅ realtime tasks (NO FAKE)
   onValue(ref(db, 'investments/' + user.uid), (snap)=>{
-    const container = document.getElementById("taskList");
-    container.innerHTML = "";
+  const container = document.getElementById("taskList");
+  container.innerHTML = "";
 
-    const tasks = snap.val();
+  const tasks = snap.val();
 
-    if(!tasks){
-      container.innerHTML = `
-        <p style="color:#aaa">
-          No active tasks<br><br>
-          👉 Go to HOME and BUY a task to start earning
-        </p>
-      `;
-      return;
-    }
+  if(!tasks){
+    container.innerHTML = `
+      <p style="color:#aaa">
+        No active tasks<br><br>
+        👉 Buy a task to start earning
+      </p>
+    `;
+    return;
+  }
 
-    Object.keys(tasks).forEach(key=>{
-      const task = tasks[key];
+  let count = 1;
 
-      const daily = task.dailyIncome || (task.capital * 0.1);
-      const earned = task.totalEarned || 0;
-      const max = daily * (task.durationDays || 30);
+  Object.keys(tasks).forEach(key=>{
+    const task = tasks[key];
 
-      const percent = Math.min((earned / max) * 100, 100);
+    const daily = task.dailyIncome || (task.capital * 0.1);
+    const earned = task.totalEarned || 0;
+    const max = daily * (task.durationDays || 30);
 
-      container.innerHTML += `
-        <div class="card">
-          <img src="LOGOClickCoin.png">
-          <div class="card-info">
-            <h3>${task.name || "Task"}</h3>
-            <p>Daily: ₱${Number(daily).toLocaleString("en-PH")}</p>
-            <p>Earned: ₱${Number(earned).toLocaleString("en-PH")}</p>
-            <p>Total: ₱${Number(max).toLocaleString("en-PH")}</p>
-            <p>Progress: ${Math.floor(percent)}%</p>
+    const percent = Math.min((earned / max) * 100, 100);
 
-            <div class="progress-bar">
-              <div class="progress-fill" style="width:${percent}%"></div>
-            </div>
+    container.innerHTML += `
+      <div class="card">
+        <img src="LOGOClickCoin.png">
+        <div class="card-info">
+          <h3>Task ${count}</h3>
+
+          <p>Task Name: ${task.name || "Click Task"}</p>
+          <p>Task Amount: ₱${Number(task.capital).toLocaleString("en-PH")}</p>
+
+          <p>Daily Income: ₱${Number(daily).toLocaleString("en-PH")}</p>
+          <p>Earned: ₱${Number(earned).toLocaleString("en-PH")}</p>
+
+          <p>Total Earnings: ₱${Number(max).toLocaleString("en-PH")}</p>
+
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${percent}%"></div>
           </div>
         </div>
-      `;
-    });
+      </div>
+    `;
 
+    count++;
   });
+
+});
 
 });
 </script>
