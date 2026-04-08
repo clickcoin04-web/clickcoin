@@ -241,7 +241,7 @@ window.buyTask = async function(task){
 
     // CHECK DUPLICATE
     const invSnap = await new Promise(res=>{
-      onValue(ref(db,'investments/'+uid), s=>res(s), {onlyOnce:true});
+      onValue(ref(db,'advertising/'+uid), s=>res(s), {onlyOnce:true});
     });
 
     const inv = invSnap.val() || {};
@@ -276,7 +276,7 @@ window.buyTask = async function(task){
     // 🔥 ATOMIC UPDATE
     const updates = {};
     updates['users/'+uid+'/wallet'] = newBalance;
-    updates['investments/'+uid+'/'+taskId] = newTask;
+    updates['advertising/'+uid+'/'+taskId] = newTask;
 
     await update(ref(db), updates);
 
