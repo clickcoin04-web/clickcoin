@@ -1,6 +1,8 @@
 const admin = require("firebase-admin");
 
+// ==========================
 // 🔥 INIT FIREBASE
+// ==========================
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_ADMIN)),
@@ -10,7 +12,9 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
-// 🔥 LOGGER (REALTIME DEBUG)
+// ==========================
+// 🔥 LOGGER
+// ==========================
 async function log(step, data) {
   try {
     const id = Date.now() + "_" + Math.random().toString(16).slice(2);
@@ -26,29 +30,47 @@ async function log(step, data) {
   }
 }
 
-// ========================================
+// ==========================
 // 🚀 MAIN FUNCTION
-// ========================================
+// ==========================
 exports.handler = async () => {
 
   const startTime = Date.now();
 
   try {
 
-    await log("START_DAILY_RUN", "Triggered");
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // ==========================
+    // 🔒 GLOBAL LOCK (ANTI DOUBLE RUN)
+    // ==========================
+    const lockRef = db.ref("system/daily_lock/" + today);
+
+    const lockSnap = await lockRef.once("value");
+
+    if (lockSnap.exists()) {
+      await log("ALREADY_RAN_TODAY", today);
+      return {
+        statusCode: 200,
+        body: "ALREADY RAN TODAY"
+      };
+    }
+
+    // SET LOCK
+    await lockRef.set({
+      time: Date.now()
+    });
+
+    await log("START_DAILY_RUN", today);
 
     const snap = await db.ref("users").once("value");
 
     if (!snap.exists()) {
       await log("NO_USERS_FOUND", null);
-      return {
-        statusCode: 200,
-        body: "NO USERS"
-      };
+      return { statusCode: 200, body: "NO USERS" };
     }
 
     const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
 
     let processedUsers = 0;
     let skippedUsers = 0;
@@ -63,7 +85,6 @@ exports.handler = async () => {
 
       processedUsers++;
 
-      // ❌ NO INVESTMENT
       if (!user.investment) {
         skippedUsers++;
         return;
@@ -71,43 +92,62 @@ exports.handler = async () => {
 
       const inv = user.investment;
 
-      // ❌ LIMIT 30 DAYS
+      // ❌ 30 days limit
       if (inv.days >= 30) {
         skippedUsers++;
         return;
       }
 
-      const last = inv.lastClaim || inv.start || now;
+      // ==========================
+      // 🔒 PER USER DAILY LOCK
+      // ==========================
+      const userDayRef = db.ref(`earnings_logs/${uid}/${today}`);
 
-      // ❌ NOT YET 24 HOURS
-      if (now - last < ONE_DAY) {
-        skippedUsers++;
-        return;
-      }
-
-      const income = inv.capital * 0.10;
-
-      // 🔥 APPLY TRANSACTION
       updates.push(
-        db.ref("users/" + uid).transaction(u => {
-          if (!u) return u;
+        userDayRef.transaction(current => {
 
-          if (!u.investment) return u;
+          if (current) {
+            // already paid today
+            return;
+          }
 
-          u.wallet = (u.wallet || 0) + income;
+          return {
+            paid: true,
+            time: now
+          };
 
-          u.investment.lastClaim = now;
-          u.investment.days = (u.investment.days || 0) + 1;
+        }).then(async (res) => {
 
-          return u;
-        }).then(() => {
+          if (!res.committed) {
+            skippedUsers++;
+            return;
+          }
+
+          const income = inv.capital * 0.10;
+
+          // ==========================
+          // 💰 SAFE WALLET UPDATE
+          // ==========================
+          await db.ref("users/" + uid).transaction(u => {
+
+            if (!u || !u.investment) return u;
+
+            u.wallet = (u.wallet || 0) + income;
+
+            u.investment.lastClaim = now;
+            u.investment.days = (u.investment.days || 0) + 1;
+
+            return u;
+          });
+
           successUsers++;
 
-          return log("USER_INCOME_ADDED", {
+          await log("USER_INCOME_ADDED", {
             uid,
             income,
             capital: inv.capital
           });
+
         })
       );
 
@@ -146,10 +186,9 @@ exports.handler = async () => {
   }
 };
 
-// ========================================
-// ⏰ NETLIFY CRON (AUTO RUN DAILY)
-// ========================================
+// ==========================
+// ⏰ CRON
+// ==========================
 exports.config = {
-  schedule: "0 16 * * *" 
-  // 🔥 12AM PH TIME (UTC-8 difference)
+  schedule: "0 16 * * *" // 12AM PH
 };

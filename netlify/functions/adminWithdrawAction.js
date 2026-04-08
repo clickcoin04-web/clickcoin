@@ -4,44 +4,41 @@ exports.handler = async (event) => {
   try {
     const ADMIN_KEY = process.env.ADMIN_API_KEY;
 
-    // 🔒 ADMIN AUTH (CRITICAL)
+    // ==========================
+    // 🔒 ADMIN AUTH
+    // ==========================
     const headers = event.headers || {};
     const providedKey = headers["x-admin-key"];
 
     if (!ADMIN_KEY || providedKey !== ADMIN_KEY) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({ error: "Unauthorized" })
-      };
+      return res(403, "Unauthorized");
     }
 
+    // ==========================
+    // 📦 PARSE BODY
+    // ==========================
     let body = {};
 
     try {
       body = JSON.parse(event.body || "{}");
     } catch {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Invalid JSON" })
-      };
+      return res(400, "Invalid JSON");
     }
 
-    const { withdrawId, action } = body;
+    const { withdrawId, action, reason } = body;
 
-    // 🔥 VALIDATION
     if (!withdrawId || !["approve", "reject"].includes(action)) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Invalid withdrawId or action" })
-      };
+      return res(400, "Invalid withdrawId or action");
     }
 
     const db = await getDB();
 
     console.log("💸 Admin action:", { withdrawId, action });
 
-    // 🔥 ATOMIC UPDATE (LOCK)
-    const withdraw = await db.collection("withdraws").findOneAndUpdate(
+    // ==========================
+    // 🔥 ATOMIC LOCK (CRITICAL)
+    // ==========================
+    const result = await db.collection("withdraws").findOneAndUpdate(
       {
         withdrawId,
         status: "pending"
@@ -49,51 +46,95 @@ exports.handler = async (event) => {
       {
         $set: {
           status: action === "approve" ? "approved" : "rejected",
-          processedAt: new Date()
+          processedAt: new Date(),
+          adminAction: action,
+          reason: reason || null
         }
       },
-      { returnDocument: "before" } // get original
+      {
+        returnDocument: "before"
+      }
     );
 
-    if (!withdraw.value) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Already processed or not found" })
-      };
+    if (!result.value) {
+      return res(400, "Already processed or not found");
     }
 
-    const original = withdraw.value;
+    const original = result.value;
 
-    // 🔥 HANDLE REJECT (RETURN BALANCE)
+    // ==========================
+    // 🔁 REJECT → REFUND
+    // ==========================
     if (action === "reject") {
-      const user = await db.collection("users").findOne({ _id: original.userId });
-
-      if (!user) {
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ error: "User not found" })
-        };
-      }
-
-      await db.collection("users").updateOne(
-        { _id: original.userId },
-        { $inc: { balance: original.amount } }
+      const refund = await db.collection("users").updateOne(
+        {
+          _id: original.userId
+        },
+        {
+          $inc: { balance: original.amount }
+        }
       );
+
+      if (refund.modifiedCount !== 1) {
+        console.error("❌ Refund failed", original.userId);
+
+        return res(500, "Refund failed - manual check needed");
+      }
     }
+
+    // ==========================
+    // 📊 UPDATE TRANSACTION LOG
+    // ==========================
+    await db.collection("transactions").updateMany(
+      {
+        userId: original.userId,
+        type: "withdraw",
+        amount: original.amount,
+        status: "pending"
+      },
+      {
+        $set: {
+          status: action === "approve" ? "approved" : "rejected",
+          processedAt: new Date()
+        }
+      }
+    );
+
+    // ==========================
+    // 📜 AUDIT LOG (IMPORTANT)
+    // ==========================
+    await db.collection("admin_logs").insertOne({
+      type: "withdraw_action",
+      withdrawId,
+      action,
+      adminKeyUsed: providedKey ? "YES" : "NO",
+      userId: original.userId,
+      amount: original.amount,
+      createdAt: new Date()
+    });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({
+        success: true,
+        action,
+        withdrawId
+      })
     };
 
   } catch (err) {
     console.error("❌ adminWithdrawAction error:", err);
 
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: err.message || "Internal error"
-      })
-    };
+    return res(500, "Internal error");
   }
 };
+
+// ==========================
+// 🔧 HELPER
+// ==========================
+function res(code, message) {
+  return {
+    statusCode: code,
+    body: JSON.stringify({ error: message })
+  };
+}

@@ -141,7 +141,7 @@
     <input type="text" id="invite" placeholder="Invite Code (Required)" readonly>
   </div>
 
-  <button class="register-btn" onclick="register()">REGISTER</button>
+  <button class="register-btn" id="registerBtn">REGISTER</button>
 
   <div id="errorMsg"></div>
 
@@ -220,6 +220,7 @@ if (autoRef) {
 
 // ================= REGISTER =================
 window.register = async function () {
+console.log("SUCCESSFULLY REGISTERED");
 
   const mobileInput = document.getElementById("mobile").value.trim();
   const password = document.getElementById("password").value.trim();
@@ -295,10 +296,13 @@ window.register = async function () {
     alert("Registered successfully!");
     window.location.href = "index.html";
 
+    
+
   } catch (err) {
     error.innerText = err.message;
   }
 };
+
 
 // ================= TOGGLE =================
 window.togglePass = function(id, el) {
@@ -307,7 +311,10 @@ window.togglePass = function(id, el) {
   el.innerText = input.type === "text" ? "🙈" : "👁";
 };
 
+document.getElementById("registerBtn").addEventListener("click", register);
 </script>
+
+
 
 </body>
 </html>
