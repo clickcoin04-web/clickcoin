@@ -275,7 +275,7 @@ window.location.replace("home.html");
 }
 }, 500);
 
-function togglePass(id, el){
+window.togglePass = function(id, el){
   const input = document.getElementById(id);
 
   if(input.type === "password"){

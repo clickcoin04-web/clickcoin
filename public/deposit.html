@@ -151,7 +151,7 @@ h2 { color: gold; text-shadow: 0 0 8px gold; }
   <div class="loader" id="loader">Redirecting to GCash...</div>
 
   <div class="note">
-    • Pay via GCash (PayMongo)<br>
+    • Pay via GCash "Download QRCode"<br>
     • Auto credit after payment<br>
     • Processing: instant to few minutes
   </div>
@@ -181,6 +181,26 @@ let isPaying = false;
 
 function formatPHP(x){
   return "₱" + Number(x).toLocaleString('en-PH');
+}
+
+async function deposit() {
+  const userId = "USER_ID_MO"; // 🔥 palitan mo ito
+
+  const res = await fetch("/.netlify/functions/createPayment", {
+    method: "POST",
+    body: JSON.stringify({
+      amount: 50,
+      uid: userId
+    })
+  });
+
+  const data = await res.json();
+
+  // 🔥 SAVE REFERENCE
+  localStorage.setItem("payment_ref", data.reference);
+
+  // 🔥 REDIRECT TO GCASH
+  window.location.href = data.checkout_url;
 }
 
 function initPage(){

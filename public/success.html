@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Payment Status</title>
+</head>
+<body style="font-family: Arial; text-align:center; padding-top:50px;">
+
+  <h2 id="status">⏳ Checking payment...</h2>
+
+  <script>
+    const reference = localStorage.getItem("payment_ref");
+
+    if (!reference) {
+      document.getElementById("status").innerText = "❌ No transaction found";
+    }
+
+    async function checkStatus() {
+      try {
+        const res = await fetch("/.netlify/functions/checkPayment?ref=" + reference);
+        const data = await res.json();
+
+        if (data.status === "COMPLETED") {
+          document.getElementById("status").innerText = "✅ PAYMENT SUCCESS!";
+          localStorage.removeItem("payment_ref");
+        } else {
+          setTimeout(checkStatus, 3000);
+        }
+
+      } catch (e) {
+        setTimeout(checkStatus, 3000);
+      }
+    }
+
+    checkStatus();
+  </script>
+
+</body>
+</html>

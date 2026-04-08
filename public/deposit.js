@@ -119,6 +119,22 @@ function goBack() {
   window.location.href = "account.html";
 }
 
+export async function deposit(userId, amount) {
+  const res = await fetch("/.netlify/functions/createPayment", {
+    method: "POST",
+    body: JSON.stringify({
+      amount,
+      uid: userId
+    })
+  });
+
+  const data = await res.json();
+
+  localStorage.setItem("payment_ref", data.reference);
+
+  window.location.href = data.checkout_url;
+}
+
 
 // ===============================
 // 🌍 AUTO INIT (OPTIONAL)
@@ -127,3 +143,4 @@ window.initDepositPage = initDepositPage;
 window.setDepositAmount = setDepositAmount;
 window.submitDeposit = submitDeposit;
 window.goBack = goBack;
+

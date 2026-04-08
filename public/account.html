@@ -147,7 +147,7 @@ text-overflow:ellipsis;
 <h3 class="glow">MY ACCOUNT</h3>
 
 <div class="card account-card">
-<p class="user-phone" id="mobile">+6300000000</p>
+<p class="user-phone" id="mobile">+63-00000000</p>
 <p class="balance-label">BALANCE</p>
 <h2 class="glow balance-amount" id="wallet">₱0.00</h2>
 </div>
@@ -233,8 +233,8 @@ document.getElementById("wallet").innerText = formatPHP(balance);
 
 // ✅ MOBILE
 let mobile = data.mobile || "";
-if(mobile && !mobile.startsWith("-")){
-mobile = "+63"+mobile.replace(/^0/,"");
+if(mobile && !mobile.startsWith("+63")){
+mobile = "+"+mobile.replace(/^0/,"");
 }
 document.getElementById("mobile").innerText = mobile;
 

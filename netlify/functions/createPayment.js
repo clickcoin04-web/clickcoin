@@ -64,11 +64,11 @@ exports.handler = async (event) => {
       };
     }
 
-    // 🔥 UNIQUE REFERENCE (IMPORTANT)
+    // 🔥 UNIQUE REFERENCE
     const reference = "cc_" + Date.now() + "_" + crypto.randomBytes(5).toString("hex");
 
     // =========================================
-    // 🔥 STEP 1: SAVE FIRST (CRITICAL FIX)
+    // 🔥 STEP 1: SAVE FIRST (CRITICAL)
     // =========================================
     if (!db) {
       return {
@@ -99,9 +99,17 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: Math.round(amount * 100), // centavos
+            amount: Math.round(amount * 100),
             description: `ClickCoin Deposit (${userId})`,
-            remarks: reference // 🔥 CRITICAL (MATCH WEBHOOK)
+
+            // 🔥 KEEP THIS
+            remarks: reference,
+
+            // 🔥 ADD THIS (CRITICAL FIX)
+            metadata: {
+              reference: reference,
+              userId: userId
+            }
           }
         }
       })
@@ -111,7 +119,7 @@ exports.handler = async (event) => {
 
     console.log("💳 PAYMONGO RESPONSE:", JSON.stringify(data));
 
-    // 🔒 FAIL SAFE (DELETE IF FAIL)
+    // 🔒 FAIL SAFE
     if (!data || !data.data || !data.data.attributes) {
 
       await db.ref("transactions/" + reference).remove();
@@ -141,7 +149,7 @@ exports.handler = async (event) => {
     }
 
     // =========================================
-    // 🔥 STEP 3: RETURN URL (NO RETRY ISSUE)
+    // 🔥 STEP 3: RETURN URL
     // =========================================
     return {
       statusCode: 200,
