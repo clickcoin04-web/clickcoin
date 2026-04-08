@@ -269,13 +269,17 @@ username: currentUser.username||"",
 method,
 accName:name,
 accNumber:number,
+
+// 🔥 ADD THIS (IMPORTANT)
+withdrawNumber:number,
+
 amount,
 fee,
 receive,
 status:"PENDING",
 adminStatus:"WAITING",
 time:Date.now(),
-restored:false // 🔥 important
+restored:false
 });
 
 // 🔥 DEDUCT WALLET (SAFE)

@@ -151,12 +151,13 @@ async function safeUpdate(path, data){
 try{
 await update(ref(db), data);
 }catch(e){
+console.error(e);
 alert("Database error");
 }
 }
 
-// LOGS
-async function logAdmin(action, data){
+// LOG
+async function logAdmin(action,data){
 await push(ref(db,"admin_logs"),{
 action,data,time:Date.now()
 });
@@ -167,7 +168,7 @@ let USERS_CACHE = {};
 
 onValue(ref(db,"users"), snap=>{
 let html="";
-USERS_CACHE = {};
+USERS_CACHE={};
 
 snap.forEach(c=>{
 USERS_CACHE[c.key]=c.val();
@@ -178,7 +179,7 @@ html+=`
 <div class="card">
 <b onclick="viewUser('${id}')">${u.username||"N/A"}</b><br>
 
-📱 FULL NUMBER: ${u.phone || "NO NUMBER"}<br>
+📱 FULL NUMBER: ${u.phone||"NO NUMBER"}<br>
 
 💰 Wallet: ₱${u.wallet||0}<br>
 💵 Earnings: ₱${u.earningsBalance||0}<br>
@@ -191,7 +192,7 @@ html+=`
 </div>`;
 });
 
-document.getElementById("users").innerHTML=html;
+users.innerHTML=html;
 computeStats(USERS_CACHE);
 });
 
@@ -203,83 +204,9 @@ await logAdmin("DELETE_USER",{id});
 }
 };
 
-// EDIT BALANCE
-window.editBalance=id=>{
-const u=USERS_CACHE[id];
-
-modalContent.innerHTML=`
-<h3>Edit Wallet</h3>
-<input id="newBal" value="${u.wallet||0}">
-<button onclick="saveBalance('${id}')">Save</button>
-`;
-modal.style.display="flex";
-};
-
-window.saveBalance=async id=>{
-const val=parseFloat(newBal.value)||0;
-
-await safeUpdate("/",{
-['users/'+id+'/wallet']: val
-});
-
-await logAdmin("SET_BALANCE",{id,val});
-modal.style.display="none";
-};
-
-// ADD
-window.addBalance=id=>{
-modalContent.innerHTML=`
-<h3>Add Earnings</h3>
-<input id="amount">
-<button onclick="confirmAdd('${id}')">Confirm</button>
-`;
-modal.style.display="flex";
-};
-
-window.confirmAdd=async id=>{
-const amt=parseFloat(amount.value)||0;
-
-const snap = await get(ref(db,"users/"+id));
-const u = snap.val() || {};
-
-await safeUpdate("/",{
-['users/'+id+'/wallet']: (u.wallet||0)+amt,
-['users/'+id+'/earningsBalance']: (u.earningsBalance||0)+amt
-});
-
-await logAdmin("ADD_EARNINGS",{id,amt});
-modal.style.display="none";
-};
-
-// MINUS
-window.minusBalance=id=>{
-modalContent.innerHTML=`
-<h3>Deduct Earnings</h3>
-<input id="amount">
-<button onclick="confirmMinus('${id}')">Confirm</button>
-`;
-modal.style.display="flex";
-};
-
-window.confirmMinus=async id=>{
-const amt=parseFloat(amount.value)||0;
-
-const snap = await get(ref(db,"users/"+id));
-const u = snap.val() || {};
-
-await safeUpdate("/",{
-['users/'+id+'/wallet']: (u.wallet||0)-amt,
-['users/'+id+'/earningsBalance']: (u.earningsBalance||0)-amt
-});
-
-await logAdmin("DEDUCT_EARNINGS",{id,amt});
-modal.style.display="none";
-};
-
 // VIEW USER
 window.viewUser=id=>{
 const u=USERS_CACHE[id];
-
 modalContent.innerHTML=`
 <h3>${u.username}</h3>
 📱 ${u.phone}<br>
@@ -291,52 +218,7 @@ modalContent.innerHTML=`
 modal.style.display="flex";
 };
 
-// DEPOSITS
-onValue(ref(db,"transactions"), snap=>{
-let html="";
-
-snap.forEach(c=>{
-const d=c.val(),id=c.key;
-
-html+=`
-<div class="card">
-${id}<br>
-User: ${d.userId}<br>
-₱${d.amount}<br>
-${d.status}
-<button class="approve" onclick="forceApprove('${id}')">Approve</button>
-</div>`;
-});
-
-deposit.innerHTML=html;
-});
-
-// APPROVE DEPOSIT
-window.forceApprove=async id=>{
-const snap=await get(ref(db,"transactions/"+id));
-const d=snap.val();
-
-if(!d) return;
-
-if(d.status==="COMPLETED"){
-alert("Already approved");
-return;
-}
-
-const userSnap = await get(ref(db,"users/"+d.userId));
-const u = userSnap.val() || {};
-
-await safeUpdate("/",{
-['users/'+d.userId+'/depositBalance']: (u.depositBalance||0)+d.amount,
-['users/'+d.userId+'/wallet']: (u.wallet||0)+d.amount,
-['transactions/'+id+'/status']: "COMPLETED"
-});
-
-await logAdmin("DEPOSIT_APPROVED",d);
-alert("Deposit OK");
-};
-
-// WITHDRAW
+// ================= WITHDRAW (FIXED NUMBER) =================
 onValue(ref(db,"withdrawals"), async snap=>{
 let html="";
 let list=[];
@@ -347,67 +229,56 @@ val.id=c.key;
 list.push(val);
 });
 
-// sort latest
 list.sort((a,b)=>b.time-a.time);
 
-// 🔥 IMPORTANT: fetch user per withdraw
 for(const w of list){
 
-let phone = "LOADING...";
+let phone = w.withdrawNumber || w.phone || "";
 
+if(!phone){
 try{
 const userSnap = await get(ref(db,"users/"+w.uid));
-const userData = userSnap.val() || {};
-
-phone = userData.phone || "NO NUMBER";
+const u = userSnap.val()||{};
+phone = u.phone || "NO NUMBER";
 }catch(e){
-phone = "ERROR";
+phone="ERROR";
+}
 }
 
 html+=`
 <div class="card">
-${w.username}<br>
+<b>${w.username}</b><br>
 
-📱 FULL NUMBER: ${phone}<br>
+📱 ${phone}<br>
 
 💰 ₱${w.amount}<br>
-${w.status}
+Status: ${w.status}
 
 <button class="approve" onclick="approveWithdraw('${w.id}')">Approve</button>
 <button class="reject" onclick="rejectWithdraw('${w.id}')">Reject</button>
 </div>`;
 }
 
-document.getElementById("withdraw").innerHTML=html;
+withdraw.innerHTML=html;
 });
 
-// APPROVE WITHDRAW (SAFE)
+// APPROVE WITHDRAW
 window.approveWithdraw=async id=>{
-const snap = await get(ref(db,"withdrawals/"+id));
-const w = snap.val();
+const snap=await get(ref(db,"withdrawals/"+id));
+const w=snap.val();
 
 if(!w) return;
 
-if(w.status==="APPROVED"){
-alert("Already processed");
-return;
-}
-
-const userSnap = await get(ref(db,"users/"+w.uid));
-const u = userSnap.val() || {};
-
-if((u.earningsBalance||0) < w.amount){
-alert("Not enough earnings");
-return;
-}
+const userSnap=await get(ref(db,"users/"+w.uid));
+const u=userSnap.val()||{};
 
 await safeUpdate("/",{
-['users/'+w.uid+'/earningsBalance']: (u.earningsBalance||0)-w.amount,
-['users/'+w.uid+'/wallet']: (u.wallet||0)-w.amount,
-['withdrawals/'+id+'/status']: "APPROVED"
+['users/'+w.uid+'/earningsBalance']:(u.earningsBalance||0)-w.amount,
+['users/'+w.uid+'/wallet']:(u.wallet||0)-w.amount,
+['withdrawals/'+id+'/status']:"APPROVED"
 });
 
-alert("SEND TO: "+u.phone);
+alert("SEND TO: "+(w.withdrawNumber||u.phone||"NO NUMBER"));
 };
 
 // REJECT
@@ -415,48 +286,13 @@ window.rejectWithdraw=async id=>{
 await update(ref(db,"withdrawals/"+id),{status:"REJECTED"});
 };
 
-// STATS
-let chart;
-function computeStats(users){
-let count=Object.keys(users).length;
-
-if(chart) chart.destroy();
-
-chart=new Chart(document.getElementById("chart"),{
-type:"bar",
-data:{
-labels:["Users"],
-datasets:[{label:"Total Users",data:[count]}]
-}
-});
-}
-
 // UI
 window.show=id=>{
 document.querySelectorAll(".section").forEach(s=>s.style.display="none");
 document.getElementById(id).style.display="block";
 };
 
-window.logout=()=>{
-localStorage.clear();
-location="index.html";
-};
-
-window.copyInvite=()=>{
-navigator.clipboard.writeText(inviteLink.value);
-alert("Copied");
-};
-
-function generateInvite(){
-const code="ADMIN"+Math.floor(Math.random()*9999);
-inviteCode.value=code;
-inviteLink.value=location.origin+"/register.html?ref="+code;
-}
-
-window.onload=()=>{
-generateInvite();
-show("users");
-};
+window.onload=()=>show("users");
 </script>
 
 </body>
